@@ -111,7 +111,7 @@
                 android:textStyle="bold"
                 android:letterSpacing="-0.02"
                 android:lineSpacingMultiplier="0.9"
-                android:text="Medium\nUnlocker."
+                android:text="@string/hero_title"
                 android:textColor="@color/text_primary"
                 android:textSize="56sp" />
 
@@ -119,12 +119,137 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="48dp"
+                android:layout_marginBottom="18dp"
                 android:fontFamily="sans-serif"
                 android:lineSpacingExtra="6dp"
-                android:text="Break free from paywalls.\nRead any Medium article without limits."
+                android:text="@string/hero_subtitle"
                 android:textColor="@color/text_secondary"
                 android:textSize="18sp" />
+
+            <!-- Supported publishers -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:fontFamily="sans-serif-medium"
+                android:letterSpacing="0.12"
+                android:text="@string/works_with_label"
+                android:textColor="@color/text_muted"
+                android:textSize="11sp" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="40dp"
+                android:clipToPadding="false"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/bg_publisher_chip"
+                        android:fontFamily="sans-serif"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp"
+                        android:text="@string/publisher_medium"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/bg_publisher_chip"
+                        android:fontFamily="sans-serif"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp"
+                        android:text="@string/publisher_nyt"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/bg_publisher_chip"
+                        android:fontFamily="sans-serif"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp"
+                        android:text="@string/publisher_wapo"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/bg_publisher_chip"
+                        android:fontFamily="sans-serif"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp"
+                        android:text="@string/publisher_bloomberg"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/bg_publisher_chip"
+                        android:fontFamily="sans-serif"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp"
+                        android:text="@string/publisher_reuters"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/bg_publisher_chip"
+                        android:fontFamily="sans-serif"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp"
+                        android:text="@string/publisher_economist"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/bg_publisher_chip"
+                        android:fontFamily="sans-serif"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:paddingTop="7dp"
+                        android:paddingBottom="7dp"
+                        android:text="@string/publisher_ft"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+            </HorizontalScrollView>
 
             <!-- URL Input Card -->
             <com.google.android.material.card.MaterialCardView
@@ -146,7 +271,7 @@
                     <com.google.android.material.textfield.TextInputLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="Paste Medium URL here..."
+                        android:hint="@string/paste_url_hint"
                         app:boxBackgroundColor="@color/secondary"
                         app:boxCornerRadiusBottomEnd="16dp"
                         app:boxCornerRadiusBottomStart="16dp"
@@ -205,7 +330,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="Unlock Article"
+                            android:text="@string/unlock_button"
                             android:textColor="@color/background"
                             android:textSize="15sp"
                             app:backgroundTint="@color/primary" />
@@ -319,6 +444,27 @@
 
                 </LinearLayout>
 
+                <!-- Category filter, shown when the home feed is bookmarks -->
+                <HorizontalScrollView
+                    android:id="@+id/homeCategoryScroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:clipToPadding="false"
+                    android:scrollbars="none"
+                    android:visibility="gone">
+
+                    <com.google.android.material.chip.ChipGroup
+                        android:id="@+id/homeCategoryChips"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:singleLine="true"
+                        app:singleSelection="true"
+                        app:selectionRequired="true"
+                        app:chipSpacingHorizontal="8dp" />
+
+                </HorizontalScrollView>
+
                 <LinearLayout
                     android:id="@+id/recentContainer"
                     android:layout_width="match_parent"
@@ -349,7 +495,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="12dp"
                         android:fontFamily="sans-serif-medium"
-                        android:text="How it works"
+                        android:text="@string/how_it_works_title"
                         android:textColor="@color/text_primary"
                         android:textSize="16sp" />
 
@@ -358,7 +504,7 @@
                         android:layout_height="wrap_content"
                         android:fontFamily="sans-serif"
                         android:lineSpacingExtra="6dp"
-                        android:text="• Share any Medium article to this app\n• Or paste the URL above\n• Automatically unlocks the article\n• Enjoy unlimited reading!"
+                        android:text="@string/how_it_works_body"
                         android:textColor="@color/text_secondary"
                         android:textSize="14sp" />
 

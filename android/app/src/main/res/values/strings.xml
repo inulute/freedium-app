@@ -1,10 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Medium Unlocker</string>
-    <string name="paste_url_hint">Paste Medium URL here</string>
-    <string name="unlock_button">Unlock Article</string>
+    <string name="app_name">Freedium</string>
+    <string name="paste_url_hint">Paste article URL here</string>
+    <string name="unlock_button">Unlock</string>
+    <string name="hero_title">Freedium.</string>
+    <string name="hero_subtitle">Break free from paywalls.\nRead articles from seven leading publishers.</string>
+    <string name="works_with_label">WORKS WITH</string>
+    <string name="publisher_medium">Medium</string>
+    <string name="publisher_nyt">The New York Times</string>
+    <string name="publisher_wapo">The Washington Post</string>
+    <string name="publisher_bloomberg">Bloomberg</string>
+    <string name="publisher_reuters">Reuters</string>
+    <string name="publisher_economist">The Economist</string>
+    <string name="publisher_ft">Financial Times</string>
+    <string name="how_it_works_title">How it works</string>
+    <string name="how_it_works_body">\u2022 Share any supported article to this app\n\u2022 Or paste the URL above\n\u2022 Automatically unlocks the article\n\u2022 Enjoy unlimited reading!</string>
     <string name="about_title">About</string>
-    <string name="about_message">Medium Unlocker helps you read Medium articles without restrictions using web archives and mirror services.\n\nShare any Medium link to this app or paste it directly!</string>
+    <string name="about_message">Freedium helps you read articles without restrictions using the freedium.cfd mirrors and web archives.\n\nShare any supported article link to this app or paste it directly!</string>
     <string name="invalid_url">Please enter a valid URL</string>
     <string name="loading">Loading article...</string>
     <string name="error_title">Oops!</string>
@@ -12,7 +24,7 @@
     <string name="retry">Retry</string>
     <string name="share_app">Share App</string>
     <string name="open_browser">Open in Browser</string>
-    <string name="deep_link_banner_title">Open Medium links automatically</string>
-    <string name="deep_link_banner_body">Tap below to open Android settings. Then choose In the app (not In your browser), tap Add link, and add medium.com and *.medium.com so Medium links open here.</string>
+    <string name="deep_link_banner_title">Open article links automatically</string>
+    <string name="deep_link_banner_body">Tap below to open Android settings. Then choose In the app (not In your browser), tap Add link, and add each site you want handled here \u2014 medium.com, nytimes.com, washingtonpost.com, bloomberg.com, reuters.com, economist.com and ft.com, plus the *. form of each.</string>
     <string name="deep_link_banner_button">Open link settings</string>
 </resources>

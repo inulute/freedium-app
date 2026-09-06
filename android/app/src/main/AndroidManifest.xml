@@ -28,17 +28,36 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Deep link: intercept Medium URLs (shows chooser dialog) -->
+            <!-- Deep link: intercept article URLs (shows chooser dialog) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="https" android:host="medium.com" />
-                <data android:scheme="https" android:host="*.medium.com" />
-                <data android:scheme="http" android:host="medium.com" />
-                <data android:scheme="http" android:host="*.medium.com" />
+                <!-- Sites Freedium resolves directly. Attributes inside one
+                     intent-filter are combined as a cross product, so the two
+                     schemes below apply to every host listed after them.
+                     Both the apex and the *. form are declared per site:
+                     Android's *. wildcard matches subdomains but NOT the apex.
+                     Keep this list in sync with MainActivity.SUPPORTED_HOSTS. -->
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+
+                <data android:host="medium.com" />
+                <data android:host="*.medium.com" />
+                <data android:host="nytimes.com" />
+                <data android:host="*.nytimes.com" />
+                <data android:host="washingtonpost.com" />
+                <data android:host="*.washingtonpost.com" />
+                <data android:host="bloomberg.com" />
+                <data android:host="*.bloomberg.com" />
+                <data android:host="reuters.com" />
+                <data android:host="*.reuters.com" />
+                <data android:host="economist.com" />
+                <data android:host="*.economist.com" />
+                <data android:host="ft.com" />
+                <data android:host="*.ft.com" />
             </intent-filter>
 
             <!-- Handle text shares that might contain Medium URLs -->

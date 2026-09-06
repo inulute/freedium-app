@@ -3,6 +3,11 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/action_categories"
+        android:title="Categories"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_export"
         android:title="Export"
         app:showAsAction="never" />

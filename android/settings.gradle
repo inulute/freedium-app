@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Medium Unlocker"
+rootProject.name = "Freedium"
 include(":app")

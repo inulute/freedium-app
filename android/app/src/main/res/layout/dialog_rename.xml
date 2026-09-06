@@ -14,7 +14,6 @@
         android:orientation="vertical"
         android:padding="24dp">
 
-        <!-- Update Icon and Title -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -27,7 +26,7 @@
                 android:padding="8dp"
                 android:background="@drawable/bg_primary_circle"
                 android:src="@drawable/ic_update"
-                android:contentDescription="Update Icon"
+                android:contentDescription="Rename Icon"
                 app:tint="@color/background" />
 
             <LinearLayout
@@ -41,17 +40,16 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:fontFamily="sans-serif-black"
-                    android:text="Update Available"
+                    android:text="New name"
                     android:textColor="@color/text_primary"
                     android:textSize="20sp" />
 
                 <TextView
-                    android:id="@+id/updateVersionText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
                     android:fontFamily="monospace"
-                    android:text="v1.0 is now available"
+                    android:text="Medium Unlocker is now Freedium"
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp" />
 
@@ -59,7 +57,6 @@
 
         </LinearLayout>
 
-        <!-- Divider -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
@@ -67,53 +64,40 @@
             android:layout_marginBottom="20dp"
             android:background="@color/border" />
 
-        <!-- Description -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif"
             android:lineSpacingExtra="4dp"
-            android:text="A new version of Freedium is available. Update now to get the latest features and improvements."
+            android:text="Same app, same history and bookmarks — nothing moved."
             android:textColor="@color/text_secondary"
             android:textSize="15sp" />
 
-        <!-- Buttons Row -->
-        <LinearLayout
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:fontFamily="sans-serif"
+            android:lineSpacingExtra="4dp"
+            android:text="It now opens articles from The New York Times, The Washington Post, Bloomberg, Reuters, The Economist and the Financial Times as well as Medium."
+            android:textColor="@color/text_muted"
+            android:textSize="14sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/renameOkButton"
+            style="@style/Widget.App.Button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:orientation="horizontal">
-
-            <!-- Cancel Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/updateCancelButton"
-                style="@style/Widget.App.Button.Outlined"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="8dp"
-                android:fontFamily="sans-serif-medium"
-                android:paddingTop="16dp"
-                android:paddingBottom="16dp"
-                android:text="Later"
-                android:textSize="14sp" />
-
-            <!-- Update Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/updateNowButton"
-                style="@style/Widget.App.Button"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:fontFamily="sans-serif-medium"
-                android:text="Update"
-                android:textAllCaps="false"
-                android:textColor="@color/background"
-                android:textSize="14sp"
-                app:backgroundTint="@color/primary"
-                app:cornerRadius="16dp" />
-
-        </LinearLayout>
+            android:fontFamily="sans-serif-medium"
+            android:paddingTop="16dp"
+            android:paddingBottom="16dp"
+            android:text="Got it"
+            android:textAllCaps="false"
+            android:textColor="@color/background"
+            android:textSize="14sp"
+            app:backgroundTint="@color/primary"
+            app:cornerRadius="16dp" />
 
     </LinearLayout>
 

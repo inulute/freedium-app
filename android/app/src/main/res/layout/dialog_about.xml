@@ -37,7 +37,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:fontFamily="sans-serif-black"
-                    android:text="Medium Unlocker"
+                    android:text="@string/app_name"
                     android:textColor="@color/text_primary"
                     android:textSize="20sp" />
 
@@ -50,6 +50,15 @@
                     android:text="Version 0.0"
                     android:textColor="@color/text_muted"
                     android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:fontFamily="sans-serif"
+                    android:text="formerly Medium Unlocker"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp" />
 
             </LinearLayout>
 
@@ -69,7 +78,7 @@
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif"
             android:lineSpacingExtra="4dp"
-            android:text="Break free from paywalls.\nRead any Medium article without limits."
+            android:text="@string/hero_subtitle"
             android:textColor="@color/text_secondary"
             android:textSize="15sp" />
 
@@ -111,7 +120,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:fontFamily="sans-serif"
-                android:text="Uses freedium.cfd for article access"
+                android:text="Unofficial client. Not affiliated with freedium.cfd"
                 android:textColor="@color/text_muted"
                 android:textSize="11sp" />
 

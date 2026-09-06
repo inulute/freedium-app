@@ -13,7 +13,7 @@
         android:background="@color/background"
         app:navigationIcon="@drawable/ic_arrow_back"
         app:navigationIconTint="@color/text_primary"
-        app:title="History &amp; Bookmarks"
+        app:title="Recent &amp; Bookmarks"
         app:titleTextColor="@color/text_primary"
         app:titleTextAppearance="@style/TextAppearance.MaterialComponents.Headline6" />
 
@@ -31,7 +31,7 @@
         <com.google.android.material.tabs.TabItem
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="History" />
+            android:text="Recent" />
 
         <com.google.android.material.tabs.TabItem
             android:layout_width="wrap_content"
@@ -82,6 +82,29 @@
             android:textSize="14sp" />
 
     </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- Bookmark category filter. Shown on the Bookmarks tab only. -->
+    <HorizontalScrollView
+        android:id="@+id/categoryScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="4dp"
+        android:clipToPadding="false"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/categoryChips"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:singleLine="true"
+            app:singleSelection="true"
+            app:selectionRequired="true"
+            app:chipSpacingHorizontal="8dp" />
+
+    </HorizontalScrollView>
 
     <FrameLayout
         android:layout_width="match_parent"

@@ -7,10 +7,10 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.google.android.material.textfield.TextInputEditText;
 
@@ -21,6 +21,7 @@ public class SettingsActivity extends AppCompatActivity {
     static final String PREF_REMEMBER_POSITION = "remember_position";
     static final String PREF_NEW_WINDOW = "new_window";
     static final String PREF_HIDE_POPUPS = "hide_popups";
+    static final String PREF_AUTO_CLIPBOARD = "auto_clipboard";
     static final String PREF_MAX_HISTORY = "max_history";
     static final String PREF_HOME_FEED = "home_feed";
     static final String PREF_MIRROR = "mirror";
@@ -38,14 +39,15 @@ public class SettingsActivity extends AppCompatActivity {
         }
     }
 
-    private static final String[] FEED_LABELS = {"Recent Articles", "Bookmarks", "Both"};
-    private static final String[] FEED_VALUES = {"history", "bookmarks", "both"};
+    private static final String[] FEED_LABELS = {"Recent Articles", "Bookmarks"};
+    static final String[] FEED_VALUES = {"history", "bookmarks"};
 
     private SeekBar textZoomSeekBar;
     private TextView textZoomValue;
     private SwitchMaterial rememberPositionSwitch;
     private SwitchMaterial newWindowSwitch;
     private SwitchMaterial hidePopupsSwitch;
+    private SwitchMaterial autoClipboardSwitch;
     private TextInputEditText maxHistoryInput;
     private TextView homeFeedValue;
     private TextView mirrorValue;
@@ -72,6 +74,7 @@ public class SettingsActivity extends AppCompatActivity {
         rememberPositionSwitch = findViewById(R.id.rememberPositionSwitch);
         newWindowSwitch = findViewById(R.id.newWindowSwitch);
         hidePopupsSwitch = findViewById(R.id.hidePopupsSwitch);
+        autoClipboardSwitch = findViewById(R.id.autoClipboardSwitch);
         maxHistoryInput = findViewById(R.id.maxHistoryInput);
         homeFeedValue = findViewById(R.id.homeFeedValue);
         mirrorValue = findViewById(R.id.mirrorValue);
@@ -97,7 +100,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void showMirrorPicker() {
         int current = mirrorIndex(selectedMirror);
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("Mirror Server")
                 .setSingleChoiceItems(MIRROR_LABELS, current, (dialog, which) -> {
                     selectedMirror = MIRROR_VALUES[which];
@@ -117,7 +120,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void showFeedPicker() {
         int current = feedIndex(selectedFeed);
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("Show on Home Screen")
                 .setSingleChoiceItems(FEED_LABELS, current, (dialog, which) -> {
                     selectedFeed = FEED_VALUES[which];
@@ -145,11 +148,15 @@ public class SettingsActivity extends AppCompatActivity {
         rememberPositionSwitch.setChecked(prefs.getBoolean(PREF_REMEMBER_POSITION, true));
         newWindowSwitch.setChecked(prefs.getBoolean(PREF_NEW_WINDOW, false));
         hidePopupsSwitch.setChecked(prefs.getBoolean(PREF_HIDE_POPUPS, false));
+        autoClipboardSwitch.setChecked(prefs.getBoolean(PREF_AUTO_CLIPBOARD, true));
 
         int maxHistory = prefs.getInt(PREF_MAX_HISTORY, 100);
         maxHistoryInput.setText(String.valueOf(maxHistory));
 
         selectedFeed = prefs.getString(PREF_HOME_FEED, "history");
+        // "both" was a third mode that no longer exists; fold it into history so a
+        // stale value is not written back the next time settings are saved.
+        if (feedIndex(selectedFeed) == 0) selectedFeed = FEED_VALUES[0];
         homeFeedValue.setText(FEED_LABELS[feedIndex(selectedFeed)]);
 
         selectedMirror = prefs.getString(PREF_MIRROR, DEFAULT_MIRROR);
@@ -185,6 +192,7 @@ public class SettingsActivity extends AppCompatActivity {
                 .putBoolean(PREF_REMEMBER_POSITION, rememberPositionSwitch.isChecked())
                 .putBoolean(PREF_NEW_WINDOW, newWindowSwitch.isChecked())
                 .putBoolean(PREF_HIDE_POPUPS, hidePopupsSwitch.isChecked())
+                .putBoolean(PREF_AUTO_CLIPBOARD, autoClipboardSwitch.isChecked())
                 .putInt(PREF_MAX_HISTORY, maxHistory)
                 .putString(PREF_HOME_FEED, selectedFeed)
                 .putString(PREF_MIRROR, selectedMirror)

@@ -19,8 +19,8 @@ android {
         applicationId "com.inulute.mediumunlocker"
         minSdk 21
         targetSdk 34
-        versionCode 9
-        versionName "2.2"
+        versionCode 10
+        versionName "3.0"
     }
 
     signingConfigs {
@@ -49,7 +49,7 @@ android {
         if (variant.buildType.name == "release") {
             variant.outputs.each { output ->
                 def resolvedVersion = variant.versionName ?: variant.mergedFlavor?.versionName ?: variant.versionCode
-                output.outputFileName = "MediumUnlocker_v${resolvedVersion}.apk"
+                output.outputFileName = "Freedium_v${resolvedVersion}.apk"
             }
         }
     }

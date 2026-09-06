@@ -2,18 +2,17 @@ package com.inulute.mediumunlocker;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.RectF;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -22,14 +21,15 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
-import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.chip.ChipGroup;
+import com.google.android.material.snackbar.Snackbar;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.textfield.TextInputEditText;
 
@@ -40,16 +40,32 @@ import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public class HistoryActivity extends AppCompatActivity {
+
+    static final String EXTRA_TAB = "tab";
+    static final String TAB_BOOKMARKS = "bookmarks";
 
     private HistoryManager historyManager;
     private RecyclerView recyclerView;
     private TextView emptyView;
     private HistoryAdapter adapter;
     private boolean showingHistory = true;
+    private TabLayout tabLayout;
+
+    private View categoryScroll;
+    private ChipGroup categoryChips;
+    private boolean buildingChips = false;
+    // Category filter for the Bookmarks tab. "" as the value means uncategorised,
+    // which is why "show everything" needs its own flag rather than a sentinel.
+    private boolean filterAllCategories = true;
+    private String categoryFilter = "";
+    // Rebuilt once per refresh; isBookmarked() re-parses the whole list per call.
+    private Set<String> bookmarkedUrls = new HashSet<>();
 
     private final ActivityResultLauncher<String[]> importLauncher = registerForActivityResult(
             new ActivityResultContracts.OpenDocument(),
@@ -68,9 +84,11 @@ public class HistoryActivity extends AppCompatActivity {
         toolbar.inflateMenu(R.menu.history_menu);
         toolbar.setOnMenuItemClickListener(this::onMenuItemSelected);
 
-        TabLayout tabLayout = findViewById(R.id.tabLayout);
+        tabLayout = findViewById(R.id.tabLayout);
         recyclerView = findViewById(R.id.historyListView);
         emptyView = findViewById(R.id.emptyView);
+        categoryScroll = findViewById(R.id.categoryScroll);
+        categoryChips = findViewById(R.id.categoryChips);
 
         TextInputEditText searchInput = findViewById(R.id.searchInput);
         if (searchInput != null) {
@@ -88,11 +106,13 @@ public class HistoryActivity extends AppCompatActivity {
         adapter = new HistoryAdapter();
         recyclerView.setAdapter(adapter);
 
-        new ItemTouchHelper(new SwipeToDeleteCallback()).attachToRecyclerView(recyclerView);
+        attachTabSwipe();
 
         tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
             @Override public void onTabSelected(TabLayout.Tab tab) {
                 showingHistory = tab.getPosition() == 0;
+                filterAllCategories = true;
+                categoryFilter = "";
                 if (searchInput != null) searchInput.setText("");
                 refreshList();
             }
@@ -100,7 +120,50 @@ public class HistoryActivity extends AppCompatActivity {
             @Override public void onTabReselected(TabLayout.Tab tab) {}
         });
 
+        if (TAB_BOOKMARKS.equals(getIntent().getStringExtra(EXTRA_TAB))) {
+            TabLayout.Tab bookmarksTab = tabLayout.getTabAt(1);
+            if (bookmarksTab != null) bookmarksTab.select();
+        }
+
         refreshList();
+    }
+
+    /**
+     * Horizontal flings move between History and Bookmarks. The detector only
+     * observes touches and never consumes them, so vertical scrolling and row
+     * taps are untouched.
+     */
+    private void attachTabSwipe() {
+        final float minDistance = 80 * getResources().getDisplayMetrics().density;
+        GestureDetector detector = new GestureDetector(this,
+                new GestureDetector.SimpleOnGestureListener() {
+                    @Override
+                    public boolean onFling(MotionEvent e1, MotionEvent e2, float vX, float vY) {
+                        if (e1 == null || e2 == null) return false;
+                        float dx = e2.getX() - e1.getX();
+                        float dy = e2.getY() - e1.getY();
+                        if (Math.abs(dx) < minDistance) return false;
+                        // Anything close to vertical belongs to the list, not to us.
+                        if (Math.abs(dx) < Math.abs(dy) * 1.5f) return false;
+                        selectTab(dx < 0 ? 1 : 0);
+                        return true;
+                    }
+                });
+
+        recyclerView.addOnItemTouchListener(new RecyclerView.SimpleOnItemTouchListener() {
+            @Override
+            public boolean onInterceptTouchEvent(@NonNull RecyclerView rv, @NonNull MotionEvent e) {
+                detector.onTouchEvent(e);
+                return false;
+            }
+        });
+        // The list is gone when a tab is empty, so the empty view needs it too.
+        emptyView.setOnTouchListener((v, e) -> detector.onTouchEvent(e));
+    }
+
+    private void selectTab(int index) {
+        TabLayout.Tab tab = tabLayout.getTabAt(index);
+        if (tab != null && !tab.isSelected()) tab.select();
     }
 
     @Override
@@ -110,22 +173,187 @@ public class HistoryActivity extends AppCompatActivity {
     }
 
     private List<HistoryManager.HistoryItem> getCurrentList() {
-        return showingHistory ? historyManager.getHistory() : historyManager.getBookmarks();
+        if (showingHistory) return historyManager.getHistory();
+        List<HistoryManager.HistoryItem> bookmarks = historyManager.getBookmarks();
+        if (filterAllCategories) return bookmarks;
+        List<HistoryManager.HistoryItem> filtered = new ArrayList<>();
+        for (HistoryManager.HistoryItem item : bookmarks) {
+            if (item.category.equals(categoryFilter)) filtered.add(item);
+        }
+        return filtered;
+    }
+
+    private String defaultEmptyMessage() {
+        if (showingHistory) return "No recent articles yet.\nUnlock an article to get started.";
+        if (!filterAllCategories) {
+            return categoryFilter.isEmpty()
+                    ? "Nothing uncategorised.\nEverything is filed away."
+                    : "Nothing in \"" + categoryFilter + "\" yet.\nLong-press a bookmark to file it here.";
+        }
+        return "No bookmarks yet.\nBookmark an article while reading, then tap \u22EE on it to file it into a category.";
     }
 
     private void refreshList() {
-        List<HistoryManager.HistoryItem> items = getCurrentList();
-        if (items.isEmpty()) {
-            recyclerView.setVisibility(View.GONE);
-            emptyView.setVisibility(View.VISIBLE);
-            emptyView.setText(showingHistory
-                    ? "No history yet.\nUnlock an article to get started."
-                    : "No bookmarks yet.\nBookmark articles while reading.");
+        bookmarkedUrls = historyManager.getBookmarkedUrls();
+        if (showingHistory) {
+            categoryScroll.setVisibility(View.GONE);
         } else {
-            recyclerView.setVisibility(View.VISIBLE);
-            emptyView.setVisibility(View.GONE);
-            adapter.setItems(items);
+            rebuildCategoryChips();
         }
+        emptyView.setText(defaultEmptyMessage());
+        // Always hand the adapter the current list, including when it is empty:
+        // otherwise stale rows survive and a later search can surface items
+        // belonging to the other tab. applyFilter() owns the visibility swap.
+        adapter.setItems(getCurrentList());
+    }
+
+    // ==================== Categories ====================
+
+    private void rebuildCategoryChips() {
+        buildingChips = true;
+        categoryScroll.setVisibility(View.VISIBLE);
+        categoryChips.removeAllViews();
+        addCategoryChip("All", true, "");
+        addCategoryChip("Uncategorised", false, "");
+        for (String name : historyManager.getCategories()) {
+            addCategoryChip(name, false, name);
+        }
+        buildingChips = false;
+    }
+
+    private void addCategoryChip(String label, boolean isAll, String value) {
+        Chip chip = (Chip) LayoutInflater.from(this)
+                .inflate(R.layout.item_category_chip, categoryChips, false);
+        chip.setId(View.generateViewId());
+        chip.setText(label);
+        chip.setChecked(isAll ? filterAllCategories
+                : (!filterAllCategories && categoryFilter.equals(value)));
+        chip.setOnClickListener(v -> {
+            if (buildingChips) return;
+            filterAllCategories = isAll;
+            categoryFilter = value;
+            refreshList();
+        });
+        categoryChips.addView(chip);
+    }
+
+    private void showMoveToCategoryDialog(HistoryManager.HistoryItem item) {
+        List<String> categories = historyManager.getCategories();
+        List<String> labels = new ArrayList<>();
+        labels.add("Uncategorised");
+        labels.addAll(categories);
+        labels.add("New category\u2026");
+
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Move to")
+                .setItems(labels.toArray(new String[0]), (dialog, which) -> {
+                    if (which == labels.size() - 1) {
+                        promptNewCategory(item);
+                        return;
+                    }
+                    historyManager.setBookmarkCategory(item.originalUrl,
+                            which == 0 ? "" : categories.get(which - 1));
+                    refreshList();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    /** Creates a category, and files {@code item} into it when one was given. */
+    private void promptNewCategory(HistoryManager.HistoryItem item) {
+        EditText input = buildNameInput(null);
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("New category")
+                .setView(input)
+                .setPositiveButton("Create", (dialog, which) -> {
+                    String created = historyManager.addCategory(input.getText().toString());
+                    if (created == null) {
+                        Toast.makeText(this, "Pick a different name", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (item != null) {
+                        historyManager.setBookmarkCategory(item.originalUrl, created);
+                    }
+                    refreshList();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showManageCategoriesDialog() {
+        List<String> categories = historyManager.getCategories();
+        if (categories.isEmpty()) {
+            promptNewCategory(null);
+            return;
+        }
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Categories")
+                .setItems(categories.toArray(new String[0]),
+                        (dialog, which) -> showCategoryActions(categories.get(which)))
+                .setPositiveButton("New", (dialog, which) -> promptNewCategory(null))
+                .setNegativeButton("Close", null)
+                .show();
+    }
+
+    private void showCategoryActions(String name) {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(name)
+                .setItems(new String[]{"Rename", "Delete"}, (dialog, which) -> {
+                    if (which == 0) promptRenameCategory(name);
+                    else confirmDeleteCategory(name);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void promptRenameCategory(String name) {
+        EditText input = buildNameInput(name);
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Rename category")
+                .setView(input)
+                .setPositiveButton("Rename", (dialog, which) -> {
+                    if (!historyManager.renameCategory(name, input.getText().toString())) {
+                        Toast.makeText(this, "Pick a different name", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (!filterAllCategories && categoryFilter.equals(name)) {
+                        categoryFilter = input.getText().toString().trim();
+                    }
+                    refreshList();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void confirmDeleteCategory(String name) {
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Delete \"" + name + "\"?")
+                .setMessage("The bookmarks in it are kept and become uncategorised.")
+                .setPositiveButton("Delete", (dialog, which) -> {
+                    historyManager.deleteCategory(name);
+                    if (!filterAllCategories && categoryFilter.equals(name)) {
+                        filterAllCategories = true;
+                        categoryFilter = "";
+                    }
+                    refreshList();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private EditText buildNameInput(String initial) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint("Category name");
+        input.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+        input.setHintTextColor(ContextCompat.getColor(this, R.color.text_muted));
+        int pad = (int) (24 * getResources().getDisplayMetrics().density);
+        input.setPadding(pad, pad / 2, pad, pad / 2);
+        if (initial != null) {
+            input.setText(initial);
+            input.setSelection(initial.length());
+        }
+        return input;
     }
 
     private void openItem(HistoryManager.HistoryItem item) {
@@ -141,13 +369,13 @@ public class HistoryActivity extends AppCompatActivity {
     private void showItemOptions(HistoryManager.HistoryItem item) {
         String title = item.title.isEmpty() ? "Article" : item.title;
         String displayTitle = title.length() > 50 ? title.substring(0, 50) + "…" : title;
-        boolean isBookmarked = historyManager.isBookmarked(item.originalUrl);
+        boolean isBookmarked = bookmarkedUrls.contains(item.originalUrl);
 
         String[] options = showingHistory
-                ? new String[]{"Open Article", isBookmarked ? "Remove Bookmark" : "Add Bookmark", "Delete from History"}
-                : new String[]{"Open Article", "Remove Bookmark"};
+                ? new String[]{"Open Article", isBookmarked ? "Remove Bookmark" : "Add Bookmark", "Delete from Recent"}
+                : new String[]{"Open Article", "Move to Category\u2026", "Remove Bookmark"};
 
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle(displayTitle)
                 .setItems(options, (dialog, which) -> {
                     if (showingHistory) {
@@ -164,17 +392,15 @@ public class HistoryActivity extends AppCompatActivity {
                                 refreshList();
                                 break;
                             case 2:
-                                historyManager.removeFromHistory(item.originalUrl);
-                                refreshList();
+                                deleteWithUndo(item, true);
                                 break;
                         }
                     } else {
                         switch (which) {
                             case 0: openItem(item); break;
-                            case 1:
-                                historyManager.removeBookmark(item.originalUrl);
-                                Toast.makeText(this, "Bookmark removed", Toast.LENGTH_SHORT).show();
-                                refreshList();
+                            case 1: showMoveToCategoryDialog(item); break;
+                            case 2:
+                                deleteWithUndo(item, false);
                                 break;
                         }
                     }
@@ -182,9 +408,41 @@ public class HistoryActivity extends AppCompatActivity {
                 .show();
     }
 
+    /**
+     * Removals are reversible: the entry's position in storage is captured first,
+     * because a row's place in the visible list is not its place in the stored one
+     * once a search or category filter is applied.
+     */
+    private void deleteWithUndo(HistoryManager.HistoryItem item, boolean fromHistory) {
+        List<HistoryManager.HistoryItem> stored = fromHistory
+                ? historyManager.getHistory() : historyManager.getBookmarks();
+        int storageIndex = historyManager.indexOfUrl(stored, item.originalUrl);
+
+        if (fromHistory) {
+            historyManager.removeFromHistory(item.originalUrl);
+        } else {
+            historyManager.removeBookmark(item.originalUrl);
+        }
+        refreshList();
+
+        Snackbar.make(recyclerView,
+                        fromHistory ? "Removed from recent articles" : "Bookmark removed",
+                        Snackbar.LENGTH_LONG)
+                .setAction("Undo", v -> {
+                    if (fromHistory) {
+                        historyManager.restoreHistoryItem(item, storageIndex);
+                    } else {
+                        historyManager.restoreBookmark(item, storageIndex);
+                    }
+                    refreshList();
+                })
+                .show();
+    }
+
     private boolean onMenuItemSelected(MenuItem item) {
         int id = item.getItemId();
-        if (id == R.id.action_export) { exportData(); return true; }
+        if (id == R.id.action_categories) { showManageCategoriesDialog(); return true; }
+        else if (id == R.id.action_export) { exportData(); return true; }
         else if (id == R.id.action_import) {
             importLauncher.launch(new String[]{"application/json", "text/plain", "*/*"});
             return true;
@@ -196,7 +454,7 @@ public class HistoryActivity extends AppCompatActivity {
         String json = historyManager.exportToJson();
         if (json == null) { Toast.makeText(this, "Export failed", Toast.LENGTH_SHORT).show(); return; }
         try {
-            File file = new File(getCacheDir(), "medium_unlocker_history.json");
+            File file = new File(getCacheDir(), "freedium_backup.json");
             FileWriter writer = new FileWriter(file);
             writer.write(json);
             writer.close();
@@ -205,7 +463,7 @@ public class HistoryActivity extends AppCompatActivity {
             intent.setType("application/json");
             intent.putExtra(Intent.EXTRA_STREAM, uri);
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(Intent.createChooser(intent, "Export History & Bookmarks"));
+            startActivity(Intent.createChooser(intent, "Export Recent & Bookmarks"));
         } catch (Exception e) {
             Toast.makeText(this, "Export failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
@@ -231,14 +489,14 @@ public class HistoryActivity extends AppCompatActivity {
     }
 
     private void showClearDialog() {
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle("Clear Data")
-                .setItems(new String[]{"Clear History", "Clear Bookmarks", "Clear All"}, (dialog, which) -> {
+                .setItems(new String[]{"Clear Recent Articles", "Clear Bookmarks", "Clear All"}, (dialog, which) -> {
                     switch (which) {
                         case 0:
                             historyManager.clearHistory();
                             historyManager.clearPositions();
-                            Toast.makeText(this, "History cleared", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Recent articles cleared", Toast.LENGTH_SHORT).show();
                             break;
                         case 1:
                             historyManager.clearBookmarks();
@@ -296,24 +554,6 @@ public class HistoryActivity extends AppCompatActivity {
             }
         }
 
-        void removeItem(int position) {
-            if (position < 0 || position >= displayList.size()) return;
-            HistoryManager.HistoryItem removed = displayList.remove(position);
-            // Also remove from fullList
-            for (int i = 0; i < fullList.size(); i++) {
-                if (fullList.get(i).originalUrl.equals(removed.originalUrl)) {
-                    fullList.remove(i);
-                    break;
-                }
-            }
-            notifyItemRemoved(position);
-            if (displayList.isEmpty()) {
-                recyclerView.setVisibility(View.GONE);
-                emptyView.setVisibility(View.VISIBLE);
-                emptyView.setText(showingHistory ? "No history yet." : "No bookmarks yet.");
-            }
-        }
-
         @NonNull
         @Override
         public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -330,16 +570,23 @@ public class HistoryActivity extends AppCompatActivity {
 
             String date = item.timestamp > 0 ? dateFormat.format(new Date(item.timestamp)) : "";
             String domain = extractDomain(item.originalUrl);
-            holder.metaView.setText(domain.isEmpty() ? date : (date.isEmpty() ? domain : domain + " · " + date));
+            String meta = domain.isEmpty() ? date : (date.isEmpty() ? domain : domain + " · " + date);
+            if (!showingHistory && !item.category.isEmpty()) {
+                meta = meta.isEmpty() ? item.category : meta + " · " + item.category;
+            }
+            holder.metaView.setText(meta);
 
             if (holder.bookmarkIndicator != null) {
                 holder.bookmarkIndicator.setVisibility(
-                        showingHistory && historyManager.isBookmarked(item.originalUrl)
+                        showingHistory && bookmarkedUrls.contains(item.originalUrl)
                                 ? View.VISIBLE : View.GONE);
             }
 
             holder.itemView.setOnClickListener(v -> openItem(item));
             holder.itemView.setOnLongClickListener(v -> { showItemOptions(item); return true; });
+            if (holder.optionsButton != null) {
+                holder.optionsButton.setOnClickListener(v -> showItemOptions(item));
+            }
         }
 
         @Override
@@ -358,78 +605,15 @@ public class HistoryActivity extends AppCompatActivity {
             TextView titleView;
             TextView metaView;
             View bookmarkIndicator;
+            View optionsButton;
 
             ViewHolder(@NonNull View itemView) {
                 super(itemView);
                 titleView = itemView.findViewById(R.id.itemTitle);
                 metaView = itemView.findViewById(R.id.itemMeta);
                 bookmarkIndicator = itemView.findViewById(R.id.bookmarkIndicator);
+                optionsButton = itemView.findViewById(R.id.itemOptions);
             }
-        }
-    }
-
-    // ==================== Swipe to Delete ====================
-
-    private class SwipeToDeleteCallback extends ItemTouchHelper.SimpleCallback {
-        private final Paint paint = new Paint();
-        private final int deleteColor = Color.parseColor("#EF4444");
-
-        SwipeToDeleteCallback() {
-            super(0, ItemTouchHelper.LEFT);
-        }
-
-        @Override
-        public boolean onMove(@NonNull RecyclerView rv,
-                              @NonNull RecyclerView.ViewHolder vh,
-                              @NonNull RecyclerView.ViewHolder target) {
-            return false;
-        }
-
-        @Override
-        public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-            int position = viewHolder.getAdapterPosition();
-            if (position < 0 || position >= adapter.displayList.size()) return;
-            HistoryManager.HistoryItem item = adapter.displayList.get(position);
-            if (showingHistory) {
-                historyManager.removeFromHistory(item.originalUrl);
-            } else {
-                historyManager.removeBookmark(item.originalUrl);
-            }
-            adapter.removeItem(position);
-        }
-
-        @Override
-        public void onChildDraw(@NonNull Canvas c,
-                                @NonNull RecyclerView recyclerView,
-                                @NonNull RecyclerView.ViewHolder viewHolder,
-                                float dX, float dY,
-                                int actionState, boolean isCurrentlyActive) {
-            if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE) {
-                View itemView = viewHolder.itemView;
-                float swipeWidth = Math.abs(dX);
-                int margin = (int) (16 * recyclerView.getResources().getDisplayMetrics().density);
-                float cornerRadius = 20 * recyclerView.getResources().getDisplayMetrics().density;
-
-                if (dX < 0) {
-                    paint.setColor(deleteColor);
-                    RectF background = new RectF(
-                            itemView.getLeft() + margin + dX,
-                            itemView.getTop(),
-                            itemView.getRight() - margin,
-                            itemView.getBottom()
-                    );
-                    c.drawRoundRect(background, cornerRadius, cornerRadius, paint);
-
-                    if (swipeWidth > 120) {
-                        paint.setColor(Color.WHITE);
-                        paint.setTextSize(36f);
-                        paint.setTextAlign(Paint.Align.RIGHT);
-                        float textY = itemView.getTop() + (itemView.getHeight() / 2f) + 12f;
-                        c.drawText("Delete", itemView.getRight() - margin - 24f, textY, paint);
-                    }
-                }
-            }
-            super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive);
         }
     }
 }

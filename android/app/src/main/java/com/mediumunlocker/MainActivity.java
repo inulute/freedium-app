@@ -30,11 +30,15 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.Locale;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.textfield.TextInputEditText;
 
 import org.json.JSONObject;
@@ -51,13 +55,22 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
 
     // Primary: Shields.io (no rate limit)
-    private static final String SHIELDS_API_URL = "https://img.shields.io/github/v/release/inulute/medium-unlocker.json";
+    private static final String SHIELDS_API_URL = "https://img.shields.io/github/v/release/inulute/freedium-app.json";
     // Backup: GitHub API (has rate limit)
-    private static final String GITHUB_API_URL = "https://api.github.com/repos/inulute/medium-unlocker/releases/latest";
-    private static final String GITHUB_RELEASES_URL = "https://github.com/inulute/medium-unlocker/releases/latest";
+    private static final String GITHUB_API_URL = "https://api.github.com/repos/inulute/freedium-app/releases/latest";
+    private static final String GITHUB_RELEASES_URL = "https://github.com/inulute/freedium-app/releases/latest";
+
+    // Sites Freedium resolves directly. Keep in sync with the deep-link
+    // intent-filter in AndroidManifest.xml, which also declares the *. form
+    // of each host (the wildcard does not cover the apex on its own).
+    static final String[] SUPPORTED_HOSTS = {
+            "medium.com", "nytimes.com", "washingtonpost.com", "bloomberg.com",
+            "reuters.com", "economist.com", "ft.com"
+    };
 
     private static final String PREFS_NAME = "MediumUnlockerPrefs";
     private static final String PREF_SKIP_VERSION = "skip_version";
+    private static final String PREF_RENAME_NOTICE_SHOWN = "rename_notice_shown";
     private static final String PREF_POPUP_SHOWN_VERSION = "popup_shown_version";
     private static final String PREF_CACHED_VERSION = "cached_latest_version";
     private static final String PREF_LAST_CHECK = "last_update_check";
@@ -76,6 +89,13 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout recentSection;
     private LinearLayout recentContainer;
     private TextView recentSectionLabel;
+    private View homeCategoryScroll;
+    private ChipGroup homeCategoryChips;
+    private boolean buildingHomeChips = false;
+    // Home-screen bookmark filter. "" as a value means uncategorised, so "show
+    // everything" needs its own flag rather than a sentinel string.
+    private boolean homeFilterAll = true;
+    private String homeCategoryFilter = "";
 
     private ExecutorService executor;
 
@@ -115,33 +135,35 @@ public class MainActivity extends AppCompatActivity {
 
         List<HistoryManager.HistoryItem> items;
         if ("bookmarks".equals(feed)) {
-            items = hm.getBookmarks();
+            items = applyHomeCategoryFilter(hm, hm.getBookmarks());
             if (recentSectionLabel != null) recentSectionLabel.setText("BOOKMARKS");
-        } else if ("both".equals(feed)) {
-            items = new ArrayList<>(hm.getHistory());
-            for (HistoryManager.HistoryItem bm : hm.getBookmarks()) {
-                boolean found = false;
-                for (HistoryManager.HistoryItem hi : items) {
-                    if (hi.originalUrl.equals(bm.originalUrl)) { found = true; break; }
-                }
-                if (!found) items.add(bm);
-            }
-            items.sort((a, b) -> Long.compare(b.timestamp, a.timestamp));
-            if (recentSectionLabel != null) recentSectionLabel.setText("RECENT");
         } else {
             items = hm.getHistory();
             if (recentSectionLabel != null) recentSectionLabel.setText("RECENT");
         }
 
+        if (!"bookmarks".equals(feed) && homeCategoryScroll != null) {
+            homeCategoryScroll.setVisibility(View.GONE);
+        }
+
         List<HistoryManager.HistoryItem> recent = items.subList(0, Math.min(5, items.size()));
 
-        if (recent.isEmpty()) {
+        // The section still has to stay up when a filter matched nothing, or the
+        // chips that produced the empty result would disappear along with it.
+        boolean filtering = "bookmarks".equals(feed) && !homeFilterAll;
+        if (recent.isEmpty() && !filtering) {
             recentSection.setVisibility(View.GONE);
             return;
         }
 
         recentSection.setVisibility(View.VISIBLE);
         recentContainer.removeAllViews();
+
+        // Parsed once for the whole feed rather than twice per card, and kept in
+        // step with the inline toggle below so the star never goes stale. The map
+        // also carries each bookmark's category, so cards can show where it is filed
+        // even in the history and combined feeds, where the item itself has none.
+        Map<String, String> bookmarkCategories = hm.getBookmarkCategories();
 
         SimpleDateFormat sdf = new SimpleDateFormat("MMM d", Locale.getDefault());
         for (HistoryManager.HistoryItem item : recent) {
@@ -154,28 +176,30 @@ public class MainActivity extends AppCompatActivity {
             titleView.setText(item.title.isEmpty() ? extractDomain(item.originalUrl) : item.title);
             String date = item.timestamp > 0 ? sdf.format(new Date(item.timestamp)) : "";
             String domain = extractDomain(item.originalUrl);
-            metaView.setText(domain.isEmpty() ? date : (date.isEmpty() ? domain : domain + " · " + date));
+            String meta = domain.isEmpty() ? date : (date.isEmpty() ? domain : domain + " · " + date);
+            String category = bookmarkCategories.get(item.originalUrl);
+            if (category != null && !category.isEmpty()) {
+                meta = meta.isEmpty() ? category : meta + " · " + category;
+            }
+            metaView.setText(meta);
 
             View tagView = card.findViewById(R.id.recentItemTag);
-            if (tagView != null) {
-                tagView.setVisibility("both".equals(feed) && hm.isBookmarked(item.originalUrl)
-                        ? View.VISIBLE : View.GONE);
-            }
+            if (tagView != null) tagView.setVisibility(View.GONE);
 
-            updateBookmarkBtn(bookmarkBtn, hm.isBookmarked(item.originalUrl));
+            updateBookmarkBtn(bookmarkBtn, bookmarkCategories.containsKey(item.originalUrl));
             bookmarkBtn.setOnClickListener(v -> {
                 boolean nowBookmarked;
-                if (hm.isBookmarked(item.originalUrl)) {
+                if (bookmarkCategories.containsKey(item.originalUrl)) {
                     hm.removeBookmark(item.originalUrl);
+                    bookmarkCategories.remove(item.originalUrl);
                     nowBookmarked = false;
                 } else {
                     hm.addBookmark(item.title, item.originalUrl, item.freediumUrl);
+                    // addBookmark preserves any category the URL already had
+                    bookmarkCategories.put(item.originalUrl, "");
                     nowBookmarked = true;
                 }
                 updateBookmarkBtn(bookmarkBtn, nowBookmarked);
-                if (tagView != null && "both".equals(feed)) {
-                    tagView.setVisibility(nowBookmarked ? View.VISIBLE : View.GONE);
-                }
             });
 
             final HistoryManager.HistoryItem finalItem = item;
@@ -220,6 +244,8 @@ public class MainActivity extends AppCompatActivity {
         recentSection = findViewById(R.id.recentSection);
         recentContainer = findViewById(R.id.recentContainer);
         recentSectionLabel = findViewById(R.id.recentSectionLabel);
+        homeCategoryScroll = findViewById(R.id.homeCategoryScroll);
+        homeCategoryChips = findViewById(R.id.homeCategoryChips);
     }
 
     private void setupListeners() {
@@ -236,7 +262,7 @@ public class MainActivity extends AppCompatActivity {
 
         supportButton.setOnClickListener(v -> openUrl("https://support.inulute.com"));
 
-        githubButton.setOnClickListener(v -> openUrl("https://github.com/inulute/medium-unlocker"));
+        githubButton.setOnClickListener(v -> openUrl("https://github.com/inulute/freedium-app"));
 
         // Handle keyboard "Go" button
         urlInput.setOnEditorActionListener((v, actionId, event) -> {
@@ -252,11 +278,123 @@ public class MainActivity extends AppCompatActivity {
 
         TextView seeAllButton = findViewById(R.id.seeAllButton);
         if (seeAllButton != null) {
-            seeAllButton.setOnClickListener(v -> startActivity(new Intent(this, HistoryActivity.class)));
+            seeAllButton.setOnClickListener(v -> {
+                Intent intent = new Intent(this, HistoryActivity.class);
+                String feed = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                        .getString(SettingsActivity.PREF_HOME_FEED, "history");
+                if ("bookmarks".equals(feed)) {
+                    intent.putExtra(HistoryActivity.EXTRA_TAB, HistoryActivity.TAB_BOOKMARKS);
+                }
+                startActivity(intent);
+            });
         }
 
-        // Auto-paste from clipboard if it contains a Medium URL
-        tryAutoPasteFromClipboard();
+        // Opt-out setting. Kept in onCreate rather than onResume: on Android 12+
+        // every clipboard read raises a system "pasted from your clipboard"
+        // notice, and onResume would fire that on each return to the app.
+        if (getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getBoolean(SettingsActivity.PREF_AUTO_CLIPBOARD, true)) {
+            tryAutoPasteFromClipboard();
+        }
+
+        maybeShowRenameNotice();
+    }
+
+    /** Filters the home bookmark feed by category and rebuilds the chip row. */
+    private List<HistoryManager.HistoryItem> applyHomeCategoryFilter(
+            HistoryManager hm, List<HistoryManager.HistoryItem> bookmarks) {
+        rebuildHomeCategoryChips(hm);
+        if (homeFilterAll) return bookmarks;
+        List<HistoryManager.HistoryItem> filtered = new ArrayList<>();
+        for (HistoryManager.HistoryItem item : bookmarks) {
+            if (item.category.equals(homeCategoryFilter)) filtered.add(item);
+        }
+        return filtered;
+    }
+
+    private void rebuildHomeCategoryChips(HistoryManager hm) {
+        if (homeCategoryScroll == null || homeCategoryChips == null) return;
+        List<String> categories = hm.getCategories();
+        if (categories.isEmpty()) {
+            // Nothing to filter by yet: a lone "All" chip would just be noise.
+            homeCategoryScroll.setVisibility(View.GONE);
+            homeFilterAll = true;
+            return;
+        }
+
+        buildingHomeChips = true;
+        homeCategoryScroll.setVisibility(View.VISIBLE);
+        homeCategoryChips.removeAllViews();
+        addHomeCategoryChip("All", true, "");
+        addHomeCategoryChip("Uncategorised", false, "");
+        for (String name : categories) addHomeCategoryChip(name, false, name);
+        buildingHomeChips = false;
+    }
+
+    private void addHomeCategoryChip(String label, boolean isAll, String value) {
+        Chip chip = (Chip) LayoutInflater.from(this)
+                .inflate(R.layout.item_category_chip, homeCategoryChips, false);
+        // ChipGroup tracks its single selection by id, and every chip inflated from
+        // the shared layout would otherwise share View.NO_ID.
+        chip.setId(View.generateViewId());
+        chip.setText(label);
+        chip.setChecked(isAll ? homeFilterAll
+                : (!homeFilterAll && homeCategoryFilter.equals(value)));
+        chip.setOnClickListener(v -> {
+            if (buildingHomeChips) return;
+            homeFilterAll = isAll;
+            homeCategoryFilter = value;
+            refreshRecentArticles();
+        });
+        homeCategoryChips.addView(chip);
+    }
+
+    /**
+     * Explains the rename to people who were already using the app under the old
+     * name. A launcher label is the wrong place for this: most launchers cut off
+     * around a dozen characters, so a parenthetical there is never read.
+     */
+    private void maybeShowRenameNotice() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        if (prefs.getBoolean(PREF_RENAME_NOTICE_SHOWN, false)) return;
+        if (!isUpgradeInstall()) {
+            // Fresh install: mark it seen so a new user is never told about a
+            // rename they were not around for.
+            prefs.edit().putBoolean(PREF_RENAME_NOTICE_SHOWN, true).apply();
+            return;
+        }
+
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_rename);
+        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        dialog.getWindow().setLayout(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        dialog.setCancelable(true);
+
+        MaterialButton okButton = dialog.findViewById(R.id.renameOkButton);
+        okButton.setOnClickListener(v -> dialog.dismiss());
+
+        // Recorded on dismissal rather than on display, so the notice survives the
+        // app being killed mid-dialog and keeps returning until it is acknowledged
+        // or explicitly dismissed.
+        dialog.setOnDismissListener(d ->
+                prefs.edit().putBoolean(PREF_RENAME_NOTICE_SHOWN, true).apply());
+
+        dialog.show();
+    }
+
+    /** True when this install has been updated at least once, rather than freshly installed. */
+    private boolean isUpgradeInstall() {
+        try {
+            android.content.pm.PackageInfo info =
+                    getPackageManager().getPackageInfo(getPackageName(), 0);
+            return info.lastUpdateTime > info.firstInstallTime;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private void checkAndShowDeepLinkBanner() {
@@ -264,14 +402,20 @@ public class MainActivity extends AppCompatActivity {
             // Below Android 12, the chooser dialog works fine — no banner needed
             return;
         }
-        // Check if this app is already the default handler for medium.com links
-        Intent testIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://medium.com/test"));
+        // The banner stays up until every supported host resolves here: approving
+        // medium.com alone leaves the other publications opening in the browser.
         PackageManager pm = getPackageManager();
-        android.content.pm.ResolveInfo resolveInfo = pm.resolveActivity(
-                testIntent, PackageManager.MATCH_DEFAULT_ONLY);
-        boolean isDefault = resolveInfo != null
-                && getPackageName().equals(resolveInfo.activityInfo.packageName);
-        deepLinkBanner.setVisibility(isDefault ? View.GONE : View.VISIBLE);
+        boolean allDefault = true;
+        for (String host : SUPPORTED_HOSTS) {
+            Intent testIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://" + host + "/test"));
+            android.content.pm.ResolveInfo resolveInfo = pm.resolveActivity(
+                    testIntent, PackageManager.MATCH_DEFAULT_ONLY);
+            if (resolveInfo == null || !getPackageName().equals(resolveInfo.activityInfo.packageName)) {
+                allDefault = false;
+                break;
+            }
+        }
+        deepLinkBanner.setVisibility(allDefault ? View.GONE : View.VISIBLE);
     }
 
     private void openDefaultLinksSettings() {
@@ -341,6 +485,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void tryAutoPasteFromClipboard() {
+        // A share intent may already have filled the box; clipboard must not win.
+        if (urlInput == null || urlInput.getText() == null
+                || urlInput.getText().toString().trim().length() > 0) {
+            return;
+        }
         ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
         if (clipboard != null && clipboard.hasPrimaryClip()) {
             ClipData.Item item = clipboard.getPrimaryClip().getItemAt(0);
@@ -723,7 +872,7 @@ public class MainActivity extends AppCompatActivity {
         // GitHub button
         MaterialButton githubButton = dialog.findViewById(R.id.aboutGithubButton);
         githubButton.setOnClickListener(v -> {
-            openUrl("https://github.com/inulute/medium-unlocker");
+            openUrl("https://github.com/inulute/freedium-app");
             dialog.dismiss();
         });
 
@@ -740,9 +889,9 @@ public class MainActivity extends AppCompatActivity {
     private void shareApp() {
         Intent shareIntent = new Intent(Intent.ACTION_SEND);
         shareIntent.setType("text/plain");
-        shareIntent.putExtra(Intent.EXTRA_SUBJECT, "Medium Unlocker");
+        shareIntent.putExtra(Intent.EXTRA_SUBJECT, "Freedium");
         shareIntent.putExtra(Intent.EXTRA_TEXT,
-                "Check out Medium Unlocker - Read Medium articles without restrictions!\n\nhttps://github.com/inulute/medium-unlocker");
+                "Check out Freedium - Read Medium articles without restrictions!\n\nhttps://github.com/inulute/freedium-app");
         startActivity(Intent.createChooser(shareIntent, "Share via"));
     }
 
