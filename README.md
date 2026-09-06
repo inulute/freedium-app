@@ -1,30 +1,26 @@
 <div align='center'>
-  <img src="assets/freedium_logo.svg" alt="Freedium Logo" height="80">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/freedium_icon_dark.svg">
+  <img src="assets/freedium_icon.svg" alt="Freedium" width="104">
+</picture>
 
 # Freedium
 
 **Read articles from seven leading publishers without a subscription.**
 
-**Medium** &nbsp;·&nbsp; **The New York Times** &nbsp;·&nbsp; **The Washington Post** &nbsp;·&nbsp; **Bloomberg** &nbsp;·&nbsp; **Reuters** &nbsp;·&nbsp; **The Economist** &nbsp;·&nbsp; **Financial Times**
+Medium &nbsp;·&nbsp; The New York Times &nbsp;·&nbsp; The Washington Post &nbsp;·&nbsp; Bloomberg &nbsp;·&nbsp; Reuters &nbsp;·&nbsp; The Economist &nbsp;·&nbsp; Financial Times
 
-*The Android app was renamed from Medium Unlocker to Freedium. The web version stays at
-[medium-unlocker.inulute.com](https://medium-unlocker.inulute.com) under its original name.*
+<br>
 
-<a href="https://medium-unlocker.inulute.com/">
-  <img src="https://img.shields.io/badge/Visit-Website-brightgreen?style=for-the-badge" alt="Website Badge">
-</a>
-<a href="https://github.com/inulute/freedium-app/releases/latest">
-  <img src="https://img.shields.io/badge/Download-Android%20App-blue?style=for-the-badge" alt="Download Badge">
-</a>
+[![Download](https://img.shields.io/github/v/release/inulute/freedium-app?style=for-the-badge&label=Download&labelColor=1F2328&color=2563EB&logo=android&logoColor=white)](https://github.com/inulute/freedium-app/releases/latest) &nbsp; [![Website](https://img.shields.io/badge/Website-2EA043?style=for-the-badge&labelColor=1F2328&logo=googlechrome&logoColor=white)](https://medium-unlocker.inulute.com/) &nbsp; [![License](https://img.shields.io/github/license/inulute/freedium-app?style=for-the-badge&labelColor=1F2328&color=6E7681)](LICENSE)
 
-<br><br>
+<sub>Formerly <b>Medium Unlocker</b>. The web version keeps that name, at <a href="https://medium-unlocker.inulute.com">medium-unlocker.inulute.com</a>.</sub>
 
-<a href="https://github.com/inulute/freedium-app/stargazers">
-  <img src="https://img.shields.io/github/stars/inulute/freedium-app?style=social" alt="Stars">
-</a>
-<a href="https://github.com/inulute">
-  <img src="https://img.shields.io/github/followers/inulute?style=social&label=Follow" alt="Followers">
-</a>
+<br>
+
+[![Stars](https://img.shields.io/github/stars/inulute/freedium-app?style=flat-square&label=Stars&labelColor=1F2328&color=E3B341&logo=github&logoColor=white)](https://github.com/inulute/freedium-app/stargazers) &nbsp; [![Follow](https://img.shields.io/github/followers/inulute?style=flat-square&label=Follow%20%40inulute&labelColor=1F2328&color=30363D&logo=github&logoColor=white)](https://github.com/inulute) &nbsp; [![Donate](https://img.shields.io/badge/Donate-30363D?style=flat-square&labelColor=1F2328&logo=buymeacoffee&logoColor=white)](https://support.inulute.com/donate)
+
 </div>
 
 ---
