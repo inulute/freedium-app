@@ -5,6 +5,8 @@
 
 **Read articles from seven leading publishers without a subscription.**
 
+**Medium** &nbsp;·&nbsp; **The New York Times** &nbsp;·&nbsp; **The Washington Post** &nbsp;·&nbsp; **Bloomberg** &nbsp;·&nbsp; **Reuters** &nbsp;·&nbsp; **The Economist** &nbsp;·&nbsp; **Financial Times**
+
 *The Android app was renamed from Medium Unlocker to Freedium. The web version stays at
 [medium-unlocker.inulute.com](https://medium-unlocker.inulute.com) under its original name.*
 
@@ -29,11 +31,7 @@
 
 ## Supported Publishers
 
-Freedium resolves articles from the publishers that [freedium.cfd](https://freedium.cfd) indexes directly:
-
-**Medium** · **The New York Times** · **The Washington Post** · **Bloomberg** · **Reuters** · **The Economist** · **Financial Times**
-
-Links from these sites can be opened straight from the Android share sheet, or set to open in the app automatically. The Archive.is mirrors work on a wider range of sites, though with less reliable results.
+Those seven are the sites [freedium.cfd](https://freedium.cfd) indexes directly. Links from them can be opened straight from the Android share sheet, or set to open in the app automatically. The Archive.is mirrors work on a wider range of sites, though with less reliable results.
 
 ---
 
