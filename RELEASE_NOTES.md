@@ -1,10 +1,63 @@
+# v3.0 (2026-09-06)
+
+---
+
+<div align='center'>
+
+<img src=./assets/freedium_logo.svg width='150px'>
+
+</div>
+
+---
+
+## Medium Unlocker is now Freedium
+
+- **New name, same app** – History, bookmarks, reading positions and settings all carry over untouched. The package identifier is unchanged, so this arrives as an ordinary update rather than a second app.
+- **One-time notice** – Anyone updating from an earlier version gets a short explanation of the rename on first launch. Fresh installs never see it.
+
+## Features
+
+### Seven publishers, not just Medium
+- **Deep links widened** – Article links from The New York Times, The Washington Post, Bloomberg, Reuters, The Economist and the Financial Times now open in the app alongside Medium.
+- **Works with list** – The home screen shows which publishers are supported at a glance.
+- **Link settings prompt** – The banner now tracks every supported domain, instead of only reporting on medium.com.
+
+### Bookmark categories
+- **File your bookmarks** – Create categories and move bookmarks into them from the ⋮ menu on any row.
+- **Filter by category** – A chip row on the Bookmarks tab, and on the home screen when it is showing bookmarks.
+- **Rename and delete** – Managed from the toolbar menu. Deleting a category keeps its bookmarks and makes them uncategorised.
+
+### Auto-paste is now optional
+- **New setting** – Settings → *Auto-paste from Clipboard* controls whether the URL box fills itself from your clipboard on open. It was previously always on.
+- **No longer overwrites** – A link arriving from the share sheet is no longer replaced by whatever is on the clipboard.
+
+## Changes
+
+- **Swipe switches tabs** – Swiping a row sideways moves between Recent and Bookmarks. It no longer deletes the article.
+- **Deletion can be undone** – Removing an entry from the ⋮ menu offers an Undo, and restores it to its original position and date rather than the top of the list.
+- **Visible row menu** – Every row has a ⋮ button, so the options are no longer hidden behind a long-press.
+- **Home feed** – *Both* has been retired; the choice is now Recent Articles or Bookmarks. Cards show which category a bookmark is filed under.
+- **See all** – Opens the tab matching your home feed instead of always landing on Recent.
+- **Dialogs** – Every dialog now uses the app's own styling instead of the platform default.
+
+## Fixes
+
+- **Faster lists** – Checking whether an article was bookmarked re-parsed the entire bookmark list for every visible row. It is now read once per refresh.
+- **Category filter selection** – The wrong filter chip could appear selected because the chips shared an identifier.
+- **Stale list contents** – Emptying a tab left its previous rows in place, where a later search could surface entries belonging to the other tab.
+- **Export covers everything** – Backups now include reading positions, categories and settings, not just history and bookmarks. Older backups still import.
+- **Credits** – The mirror list named the same host twice and described a working mirror as offline.
+- **Builds anywhere** – A machine-specific Java path had been committed, which prevented the project building on any other computer.
+
+---
+
 # v2.2 (2026-08-16)
 
 ---
 
 <div align='center'>
 
-<img src=./assets/medium_unlock_logo.svg width='150px'>
+<img src=./assets/freedium_logo.svg width='150px'>
 
 </div>
 
@@ -29,7 +82,7 @@
 
 <div align='center'>
 
-<img src=./assets/medium_unlock_logo.svg width='150px'>
+<img src=./assets/freedium_logo.svg width='150px'>
 
 </div>
 
@@ -53,7 +106,7 @@
 
 <div align='center'>
 
-<img src=./assets/medium_unlock_logo.svg width='150px'>
+<img src=./assets/freedium_logo.svg width='150px'>
 
 </div>
 
@@ -83,7 +136,7 @@
 
 <div align='center'>
 
-<img src=./assets/medium_unlock_logo.svg width='150px'>
+<img src=./assets/freedium_logo.svg width='150px'>
 
 </div>
 
@@ -115,7 +168,7 @@
 
 <div align='center'>
 
-<img src=./assets/medium_unlock_logo.svg width='150px'>
+<img src=./assets/freedium_logo.svg width='150px'>
 
 </div>
 
@@ -155,7 +208,7 @@
 
 <div align='center'>
 
-<img src=./assets/medium_unlock_logo.svg width='150px'>
+<img src=./assets/freedium_logo.svg width='150px'>
 
 </div>
 
@@ -181,7 +234,7 @@
 
 <div align='center'>
 
-<img src=./assets/medium_unlock_logo.svg width='150px'>
+<img src=./assets/freedium_logo.svg width='150px'>
 
 </div>
 
