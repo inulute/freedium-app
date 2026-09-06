@@ -1,1 +1,0 @@
-New setting to hide the mirror site's notification popups (off by default). New "Copy as Markdown" option in the article menu, for pasting a full article into notes or an AI prompt.
