@@ -313,6 +313,196 @@ body {
   margin-top: 32px;
 }
 
+
+/* Android rename announcement */
+.rename-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #1A1A1A;
+  border: 1px solid #262626;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  color: #A3A3A3;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.rename-notice strong {
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+.rename-badge {
+  flex-shrink: 0;
+  background: #FFFFFF;
+  color: #050505;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+}
+
+/* Paste control */
+.paste-button {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 1px solid #262626;
+  color: #A3A3A3;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.paste-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+  border-color: #404040;
+}
+
+/* Publisher chips */
+.publisher-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
+.publisher-chip {
+  font-size: 12px;
+  color: #A3A3A3;
+  background: #1A1A1A;
+  border: 1px solid #262626;
+  border-radius: 999px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+
+/* Recent & Saved */
+.library-card {
+  background: #1A1A1A;
+  border: 1px solid #262626;
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.library-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.library-tab {
+  background: transparent;
+  border: 1px solid #262626;
+  border-radius: 999px;
+  color: #A3A3A3;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  transition: all 0.2s ease;
+}
+
+.library-tab:hover {
+  color: #FFFFFF;
+  border-color: #404040;
+}
+
+.library-tab.active {
+  background: #FFFFFF;
+  border-color: #FFFFFF;
+  color: #050505;
+}
+
+.library-list {
+  list-style: none;
+}
+
+.library-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-top: 1px solid #262626;
+}
+
+.library-item:first-child {
+  border-top: none;
+}
+
+.library-open {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 12px 4px;
+  text-align: left;
+}
+
+.library-host {
+  color: #FFFFFF;
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-meta {
+  color: #737373;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.library-action {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #737373;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 8px;
+  transition: all 0.2s ease;
+}
+
+.library-action:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+}
+
+.library-action.saved {
+  color: #FFFFFF;
+}
+
+.library-empty,
+.library-note {
+  color: #737373;
+  font-size: 12px;
+}
+
+.library-empty {
+  padding: 12px 4px;
+}
+
+.library-note {
+  margin-top: 12px;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .App {
@@ -338,6 +528,10 @@ body {
 
   .button-stats {
     font-size: 10px;
+  }
+
+  .publisher-row {
+    margin-bottom: 24px;
   }
 }
 

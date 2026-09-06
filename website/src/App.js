@@ -8,36 +8,85 @@ const MIRRORS = [
   { label: 'Archive.is (Alt)', value: 'archive_alt',    base: 'https://archive.is/oldest/' },
 ];
 
+const PUBLISHERS = [
+  'Medium', 'The New York Times', 'The Washington Post', 'Bloomberg',
+  'Reuters', 'The Economist', 'Financial Times',
+];
+
+const HISTORY_KEY = 'history';
+const BOOKMARKS_KEY = 'bookmarks';
+const MAX_HISTORY = 50;
+
+// localStorage throws outright in some privacy modes, so every access is guarded.
+const readStore = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+};
+
+const writeStore = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) { /* quota or blocked storage: the page still works without it */ }
+};
+
+const hostOf = (url) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch (e) {
+    return '';
+  }
+};
+
+const formatDate = (ts) =>
+  new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
 function App() {
   const [url, setUrl] = useState('');
   const [mirror, setMirror] = useState(() => {
-    return localStorage.getItem('mirror') || 'freedium_mirror';
+    try {
+      return localStorage.getItem('mirror') || 'freedium_mirror';
+    } catch (e) {
+      return 'freedium_mirror';
+    }
   });
   const [stats, setStats] = useState({ downloads: null, stars: null });
+  const [history, setHistory] = useState(() => readStore(HISTORY_KEY));
+  const [bookmarks, setBookmarks] = useState(() => readStore(BOOKMARKS_KEY));
+  const [tab, setTab] = useState('recent');
 
   useEffect(() => {
-    localStorage.setItem('mirror', mirror);
+    try {
+      localStorage.setItem('mirror', mirror);
+    } catch (e) { /* ignore */ }
   }, [mirror]);
+
+  useEffect(() => { writeStore(HISTORY_KEY, history); }, [history]);
+  useEffect(() => { writeStore(BOOKMARKS_KEY, bookmarks); }, [bookmarks]);
 
   useEffect(() => {
     const fetchGitHubStats = async () => {
       try {
-        // Fetch from Netlify Function with caching
         const response = await fetch('/api/github-stats');
         if (response.ok) {
           const data = await response.json();
-          setStats({ 
-            downloads: data.downloads || 0, 
-            stars: data.stars || 0 
-          });
+          setStats({ downloads: data.downloads || 0, stars: data.stars || 0 });
         }
       } catch (error) {
         console.error('Error loading GitHub stats:', error);
       }
     };
-    
     fetchGitHubStats();
   }, []);
+
+  const openArticle = (articleUrl) => {
+    const selected = MIRRORS.find(m => m.value === mirror) || MIRRORS[0];
+    window.open(selected.base + articleUrl, '_blank');
+  };
 
   const handleUnlock = () => {
     const inputUrl = url.trim();
@@ -45,29 +94,45 @@ function App() {
       alert('Please enter a URL');
       return;
     }
-
-    const selected = MIRRORS.find(m => m.value === mirror) || MIRRORS[0];
-    window.open(selected.base + inputUrl, '_blank');
+    openArticle(inputUrl);
+    setHistory(prev => [
+      { url: inputUrl, host: hostOf(inputUrl), ts: Date.now() },
+      ...prev.filter(item => item.url !== inputUrl),
+    ].slice(0, MAX_HISTORY));
     setUrl('');
   };
 
+  // Clipboard reads need a user gesture and a secure context, and Safari prompts.
+  // Hence a button rather than a read on mount, and a silent failure if refused.
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text && text.trim()) setUrl(text.trim());
+    } catch (e) { /* denied or unsupported: the user can still paste manually */ }
+  };
+
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      handleUnlock();
-    }
+    if (e.key === 'Enter') handleUnlock();
   };
 
-  const handleStarRepo = () => {
-    window.open('https://github.com/inulute/medium-unlocker', '_blank');
+  const isBookmarked = (articleUrl) => bookmarks.some(b => b.url === articleUrl);
+
+  const toggleBookmark = (item) => {
+    setBookmarks(prev => prev.some(b => b.url === item.url)
+      ? prev.filter(b => b.url !== item.url)
+      : [{ ...item, ts: item.ts || Date.now() }, ...prev]);
   };
 
-  const handleDownload = () => {
-    window.open('https://github.com/inulute/medium-unlocker/releases/latest', '_blank');
+  const removeItem = (item) => {
+    if (tab === 'recent') setHistory(prev => prev.filter(h => h.url !== item.url));
+    else setBookmarks(prev => prev.filter(b => b.url !== item.url));
   };
 
-  const handleSupport = () => {
-    window.open('https://support.inulute.com', '_blank');
-  };
+  const handleStarRepo = () => window.open('https://github.com/inulute/freedium-app', '_blank');
+  const handleDownload = () => window.open('https://github.com/inulute/freedium-app/releases/latest', '_blank');
+  const handleSupport = () => window.open('https://support.inulute.com', '_blank');
+
+  const listed = tab === 'recent' ? history : bookmarks;
 
   return (
     <div className="App">
@@ -93,13 +158,25 @@ function App() {
       {/* Main Content */}
       <div className="container">
         {/* Hero Section */}
-        <h1 className="hero-title">
-          Medium<br/>Unlocker.
-        </h1>
+        <h1 className="hero-title">Medium<br/>Unlocker.</h1>
         <p className="subtitle">
           Break free from paywalls.<br/>
-          Read any Medium article without limits.
+          Read articles from seven leading publishers without a subscription.
         </p>
+
+        <div className="rename-notice">
+          <span className="rename-badge">New</span>
+          <span>
+            The Android app is now called <strong>Freedium</strong> — same app,
+            same data, and it now opens links from all seven publishers.
+          </span>
+        </div>
+
+        <div className="publisher-row">
+          {PUBLISHERS.map(name => (
+            <span className="publisher-chip" key={name}>{name}</span>
+          ))}
+        </div>
 
         {/* Input Card */}
         <div className="input-card">
@@ -112,9 +189,11 @@ function App() {
               onKeyPress={handleKeyPress}
               className="url-input"
             />
-            {url && (
-              <button className="clear-button" onClick={() => setUrl('')}>
-                ✕
+            {url ? (
+              <button className="clear-button" onClick={() => setUrl('')}>✕</button>
+            ) : (
+              <button className="paste-button" onClick={handlePaste} title="Paste from clipboard">
+                Paste
               </button>
             )}
           </div>
@@ -151,14 +230,66 @@ function App() {
           </div>
         </div>
 
+        {/* Recent & Saved */}
+        {(history.length > 0 || bookmarks.length > 0) && (
+          <div className="library-card">
+            <div className="library-tabs">
+              <button
+                className={tab === 'recent' ? 'library-tab active' : 'library-tab'}
+                onClick={() => setTab('recent')}
+              >
+                Recent
+              </button>
+              <button
+                className={tab === 'saved' ? 'library-tab active' : 'library-tab'}
+                onClick={() => setTab('saved')}
+              >
+                Saved
+              </button>
+            </div>
+
+            {listed.length === 0 ? (
+              <p className="library-empty">
+                {tab === 'recent' ? 'Nothing opened yet.' : 'Nothing saved yet.'}
+              </p>
+            ) : (
+              <ul className="library-list">
+                {listed.map(item => (
+                  <li className="library-item" key={item.url}>
+                    <button className="library-open" onClick={() => openArticle(item.url)}>
+                      <span className="library-host">{item.host || 'article'}</span>
+                      <span className="library-meta">{formatDate(item.ts)}</span>
+                    </button>
+                    <button
+                      className={isBookmarked(item.url) ? 'library-action saved' : 'library-action'}
+                      onClick={() => toggleBookmark(item)}
+                      title={isBookmarked(item.url) ? 'Remove from saved' : 'Save'}
+                    >
+                      ★
+                    </button>
+                    <button
+                      className="library-action"
+                      onClick={() => removeItem(item)}
+                      title="Remove"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="library-note">Stored in this browser only — not synced with the app.</p>
+          </div>
+        )}
+
         {/* Info Card */}
         <div className="info-card">
           <h3>How it works</h3>
           <ul>
-            <li>Paste any Medium article URL above</li>
-            <li>Click "Unlock Article" to open via the selected mirror</li>
-            <li>Uses freedium.cfd or other mirrors to access the article</li>
-            <li>Download the Android app for seamless mobile access</li>
+            <li>Paste an article URL from any supported publisher above</li>
+            <li>Click "Unlock Article" to open it via the selected mirror</li>
+            <li>Freedium mirrors cover the seven publishers; Archive.is works more widely</li>
+            <li>Download the Android app to open links straight from your share sheet</li>
             <li>Enjoy unlimited reading!</li>
           </ul>
         </div>

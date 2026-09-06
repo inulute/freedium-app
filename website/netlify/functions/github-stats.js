@@ -3,7 +3,7 @@
 
 const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
 const GITHUB_USER = 'inulute';
-const GITHUB_REPO = 'medium-unlocker';
+const GITHUB_REPO = 'freedium-app';
 
 // Global cache (persists across invocations while function is warm)
 let cache = {
