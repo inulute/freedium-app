@@ -1,0 +1,3 @@
+The app is now called Freedium. Same app, same data - your history, bookmarks, reading positions and settings all carry over untouched.
+
+New: article links from The New York Times, The Washington Post, Bloomberg, Reuters, The Economist and the Financial Times now open in the app, alongside Medium. Bookmarks can be filed into categories. Auto-paste from the clipboard is now an optional setting. Swiping an item away can be undone. Export files now include reading positions, categories and settings, so a backup restores everything.

@@ -1,1 +1,1 @@
-Read Medium articles without paywalls using Freedium and archive mirrors.
+Unofficial Freedium client - read Medium articles without paywalls.
