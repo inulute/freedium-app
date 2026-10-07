@@ -10,10 +10,14 @@
  *     fetched from Java, and it's gone by the time a DownloadListener would run.
  * So download links are caught here, the bytes are read in the page and handed to
  * the MuDownloads interface as base64. Idempotent per page.
+ *
+ * __MU_TOKEN__ is replaced with a per-activity secret before injection; every
+ * MuDownloads call carries it so other frames on the page can't use the interface.
  */
 (function(){
 if(window.__muDownloadBridge||!window.MuDownloads)return;
 window.__muDownloadBridge=true;
+var token=__MU_TOKEN__;
 var blobs={};
 var createUrl=URL.createObjectURL,revokeUrl=URL.revokeObjectURL;
 URL.createObjectURL=function(obj){
@@ -34,12 +38,12 @@ return m?m[1]:(fallback||'');
 function lastSegment(href){
 try{var p=new URL(href).pathname.split('/');return decodeURIComponent(p[p.length-1]||'');}catch(e){return '';}
 }
-function fail(name){try{MuDownloads.fail(name||'');}catch(e){}}
+function fail(name){try{MuDownloads.fail(token,name||'');}catch(e){}}
 function send(blob,name,mime){
 var reader=new FileReader();
 reader.onload=function(){
 var s=String(reader.result||'');
-MuDownloads.save(s.substring(s.indexOf(',')+1),name||'',mime||blob.type||'');
+MuDownloads.save(token,s.substring(s.indexOf(',')+1),name||'',mime||blob.type||'');
 };
 reader.onerror=function(){fail(name);};
 reader.readAsDataURL(blob);
@@ -64,7 +68,7 @@ if(href.indexOf('data:')===0){fetchAndSend(href,name);return true;}
 // Cross-origin links can't be read here (CORS); they fall through to the
 // WebView's DownloadListener instead.
 if(/^https?:/i.test(href)&&a.origin===location.origin){
-MuDownloads.started(name);
+MuDownloads.started(token,name);
 fetchAndSend(href,name);
 return true;
 }
@@ -74,4 +78,11 @@ document.addEventListener('click',function(e){
 var a=e.target&&e.target.closest?e.target.closest('a[download]'):null;
 if(a&&handle(a))e.preventDefault();
 },true);
+// Some pages click an <a download> that was never added to the document, so the
+// click never reaches the listener above; catch those here to keep the file name.
+var click=HTMLAnchorElement.prototype.click;
+HTMLAnchorElement.prototype.click=function(){
+if(!this.isConnected&&this.hasAttribute('download')&&handle(this))return;
+return click.apply(this,arguments);
+};
 })();
