@@ -24,6 +24,7 @@ import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -64,7 +65,9 @@ public class WebViewActivity extends AppCompatActivity {
     private static final String PENDING_DOWNLOAD_FILE = "pending_download";
 
     private static final String[] MIRROR_HOSTS = {
-        "freedium.cfd", "freedium-mirror.cfd",
+        "freedium.cfd", "freedium-mirror.cfd", "freedium-mirror-web.vercel.app",
+        // Serves the web mirror's PDF / Markdown downloads.
+        "medium-mirror-adey.vercel.app",
         "archive.is", "archive.ph", "archive.today", "archive.fo",
         "archive.li", "archive.vn", "archive.md"
     };
@@ -79,12 +82,23 @@ public class WebViewActivity extends AppCompatActivity {
             "document.documentElement.appendChild(s);" +
             "})();";
 
-    private static final String[] MIRROR_BASES = {
-        "https://freedium-mirror.cfd/",
-        "https://freedium.cfd/",
-        "https://archive.is/newest/",
-        "https://archive.is/oldest/"
-    };
+    /** Mirror base URLs, in the order a failed load falls back through. */
+    private static final String[] MIRROR_BASES = new String[SettingsActivity.MIRROR_VALUES.length];
+    static {
+        for (int i = 0; i < MIRROR_BASES.length; i++) {
+            MIRROR_BASES[i] = SettingsActivity.getMirrorBaseUrl(SettingsActivity.MIRROR_VALUES[i]);
+        }
+    }
+
+    /**
+     * How long a Freedium mirror gets to show a page before the next one is tried. When a
+     * mirror is down its connection tends to hang rather than fail, so no error ever arrives.
+     */
+    private static final long MIRROR_TIMEOUT_MS = 15000;
+    /** Shown by the Freedium site's service worker when it can't reach its server. */
+    private static final String OFFLINE_PAGE_CHECK_JS =
+            "(document.body&&document.body.innerText||'').indexOf('Reconnect to read new articles')>=0";
+    private static final String TITLE_SUFFIX = " — Freedium Mirror";
 
     private HistoryManager historyManager;
     private MenuItem bookmarkMenuItem;
@@ -109,6 +123,9 @@ public class WebViewActivity extends AppCompatActivity {
     private int currentMirrorIndex = 0;
     private int startMirrorIndex = 0;
     private boolean mainFrameError = false;
+    /** Mirror load the app started and hasn't yet seen a real page for, or null. */
+    private String pendingMirrorUrl;
+    private final Runnable mirrorTimeout = () -> tryNextMirror("timed out");
 
     // Article downloads (the mirror's "Download article" menu)
     private final ExecutorService downloadExecutor = Executors.newSingleThreadExecutor();
@@ -369,11 +386,23 @@ public class WebViewActivity extends AppCompatActivity {
                 injectDownloadBridge();
                 if (loadingOverlay != null) loadingOverlay.setVisibility(View.GONE);
 
-                String title = view.getTitle();
+                String title = cleanTitle(view.getTitle());
                 boolean goodTitle = title != null && !title.isEmpty()
                         && !title.startsWith("http") && !isErrorTitle(title);
                 if (goodTitle) {
                     toolbar.setTitle(title);
+                }
+                // An abandoned load can still finish here, carrying the previous page's title.
+                if (pendingMirrorUrl != null && goodTitle && !isStaleMirrorLoad(Uri.parse(url))) {
+                    if (isFreediumUrl(url)) {
+                        // An offline page from the site's service worker still has a normal title.
+                        view.evaluateJavascript(OFFLINE_PAGE_CHECK_JS, offline -> {
+                            if ("true".equals(offline)) tryNextMirror("offline page");
+                            else mirrorLoaded();
+                        });
+                    } else {
+                        mirrorLoaded();
+                    }
                 }
 
                 // Save to history only on clean loads with real titles
@@ -408,25 +437,19 @@ public class WebViewActivity extends AppCompatActivity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
-                if (request.isForMainFrame()) {
+                if (request.isForMainFrame() && !isStaleMirrorLoad(request.getUrl())) {
                     hideLoading();
-                    view.setVisibility(View.GONE);
-                    int nextIndex = (currentMirrorIndex + 1) % MIRROR_BASES.length;
-                    if (nextIndex != startMirrorIndex && originalUrl != null) {
-                        currentMirrorIndex = nextIndex;
-                        String nextUrl = MIRROR_BASES[currentMirrorIndex] + originalUrl;
-                        currentUrl = nextUrl;
-                        Log.d(TAG, "Mirror failed, trying next: " + MIRROR_BASES[currentMirrorIndex]);
-                        if (loadingOverlay != null) {
-                            loadingOverlay.setVisibility(View.VISIBLE);
-                            if (loadingText != null) loadingText.setText("Trying next mirror...");
-                        }
-                        view.setVisibility(View.VISIBLE);
-                        view.loadUrl(nextUrl);
-                        return;
-                    }
-                    mainFrameError = true;
-                    showError();
+                    tryNextMirror("error " + error.getErrorCode());
+                }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
+                super.onReceivedHttpError(view, request, response);
+                // A mirror that is down behind its CDN answers with a 5xx page instead.
+                if (request.isForMainFrame() && pendingMirrorUrl != null
+                        && response.getStatusCode() >= 500 && !isStaleMirrorLoad(request.getUrl())) {
+                    tryNextMirror("HTTP " + response.getStatusCode());
                 }
             }
 
@@ -443,7 +466,7 @@ public class WebViewActivity extends AppCompatActivity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
                 if (url.contains("freedium.cfd") || url.contains("freedium-mirror.cfd")
-                        || isArchiveUrl(url) || url.contains("medium.com")) {
+                        || isMirrorUrl(url) || isArchiveUrl(url) || url.contains("medium.com")) {
                     return false;
                 }
                 try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
@@ -466,6 +489,7 @@ public class WebViewActivity extends AppCompatActivity {
             @Override
             public void onReceivedTitle(WebView view, String title) {
                 super.onReceivedTitle(view, title);
+                title = cleanTitle(title);
                 if (isErrorTitle(title) || mainFrameError) return;
                 if (!title.startsWith("http")) {
                     toolbar.setTitle(title);
@@ -482,7 +506,7 @@ public class WebViewActivity extends AppCompatActivity {
         retryButton.setOnClickListener(v -> {
             errorLayout.setVisibility(View.GONE);
             webView.setVisibility(View.VISIBLE);
-            if (currentUrl != null) webView.loadUrl(currentUrl);
+            if (currentUrl != null) startMirrorLoad(currentUrl);
         });
 
         tryProxyButton.setVisibility(View.GONE);
@@ -491,15 +515,13 @@ public class WebViewActivity extends AppCompatActivity {
         tryAlternativeButton.setVisibility(View.VISIBLE);
         tryAlternativeButton.setOnClickListener(v -> {
             if (originalUrl != null) {
-                currentMirrorIndex = (currentMirrorIndex + 1) % MIRROR_BASES.length;
-                startMirrorIndex = currentMirrorIndex;
-                String nextUrl = MIRROR_BASES[currentMirrorIndex] + originalUrl;
-                currentUrl = nextUrl;
-                if (loadingText != null) loadingText.setText("Switching to " + getMirrorLabel(currentMirrorIndex) + "...");
+                int next = (currentMirrorIndex + 1) % MIRROR_BASES.length;
+                startMirrorIndex = next;
+                if (loadingText != null) loadingText.setText("Switching to " + getMirrorLabel(next) + "...");
                 if (loadingOverlay != null) loadingOverlay.setVisibility(View.VISIBLE);
                 errorLayout.setVisibility(View.GONE);
                 webView.setVisibility(View.VISIBLE);
-                webView.loadUrl(nextUrl);
+                loadMirror(next);
             }
         });
 
@@ -523,8 +545,81 @@ public class WebViewActivity extends AppCompatActivity {
         }
         startMirrorIndex = currentMirrorIndex;
 
-        if (currentUrl != null && !currentUrl.isEmpty()) webView.loadUrl(currentUrl);
+        if (currentUrl != null && !currentUrl.isEmpty()) startMirrorLoad(currentUrl);
         else showError();
+    }
+
+    private void loadMirror(int index) {
+        currentMirrorIndex = index;
+        currentUrl = SettingsActivity.buildMirrorUrl(MIRROR_BASES[index], originalUrl);
+        startMirrorLoad(currentUrl);
+    }
+
+    /**
+     * Loads a mirror page and watches it: an error, a 5xx, an offline page or (for the
+     * Freedium mirrors) no page within MIRROR_TIMEOUT_MS moves on to the next mirror.
+     * Archive.is is often slow, so it gets no timeout.
+     */
+    private void startMirrorLoad(String url) {
+        webView.removeCallbacks(mirrorTimeout);
+        pendingMirrorUrl = url;
+        if (!isArchiveUrl(url)) webView.postDelayed(mirrorTimeout, MIRROR_TIMEOUT_MS);
+        webView.loadUrl(url);
+    }
+
+    /** The pending mirror showed a real page; stop watching it. */
+    private void mirrorLoaded() {
+        webView.removeCallbacks(mirrorTimeout);
+        pendingMirrorUrl = null;
+    }
+
+    /** Gives up on the current mirror and loads the next, or shows the error once all were tried. */
+    private void tryNextMirror(String reason) {
+        if (webView == null || isFinishing() || isDestroyed()) return;
+        webView.removeCallbacks(mirrorTimeout);
+        pendingMirrorUrl = null;
+        int next = (currentMirrorIndex + 1) % MIRROR_BASES.length;
+        if (originalUrl == null || next == startMirrorIndex) {
+            Log.d(TAG, getMirrorLabel(currentMirrorIndex) + " failed (" + reason + "), no mirrors left");
+            webView.stopLoading();
+            webView.setVisibility(View.GONE);
+            mainFrameError = true;
+            showError();
+            return;
+        }
+        Log.d(TAG, getMirrorLabel(currentMirrorIndex) + " failed (" + reason + "), trying " + getMirrorLabel(next));
+        if (loadingOverlay != null) {
+            loadingOverlay.setVisibility(View.VISIBLE);
+            if (loadingText != null) loadingText.setText("Trying " + getMirrorLabel(next) + "...");
+        }
+        errorLayout.setVisibility(View.GONE);
+        webView.setVisibility(View.VISIBLE);
+        loadMirror(next);
+    }
+
+    /**
+     * True for a callback about a load the app already moved on from, e.g. the old mirror's
+     * request being aborted after a timeout. Those mustn't trigger another fallback.
+     */
+    private boolean isStaleMirrorLoad(Uri requestUrl) {
+        if (pendingMirrorUrl == null || requestUrl == null) return false;
+        String pendingHost = Uri.parse(pendingMirrorUrl).getHost();
+        return pendingHost != null && !pendingHost.equalsIgnoreCase(requestUrl.getHost());
+    }
+
+    private static boolean isFreediumUrl(String url) {
+        if (url == null) return false;
+        String host = Uri.parse(url).getHost();
+        return host != null && (host.equals("freedium.cfd") || host.endsWith(".freedium.cfd")
+                || host.equals("freedium-mirror.cfd") || host.endsWith(".freedium-mirror.cfd"));
+    }
+
+    /** Drops the site name the web mirror appends to article titles. */
+    private static String cleanTitle(String title) {
+        if (title != null && title.endsWith(TITLE_SUFFIX)) {
+            return title.substring(0, title.length() - TITLE_SUFFIX.length()).trim();
+        }
+        return title;
     }
 
     private boolean isArchiveUrl(String url) {
@@ -555,12 +650,7 @@ public class WebViewActivity extends AppCompatActivity {
     }
 
     private String getMirrorLabel(int index) {
-        switch (index) {
-            case 1: return "Archive.is (Alt)";
-            case 2: return "Freedium";
-            case 3: return "Freedium Mirror";
-            default: return "Archive.is";
-        }
+        return SettingsActivity.MIRROR_LABELS[index];
     }
 
     private void showLoading() {
@@ -800,6 +890,7 @@ public class WebViewActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         downloadExecutor.shutdown();
+        if (webView != null) webView.removeCallbacks(mirrorTimeout);
         if (webView != null) webView.destroy();
         super.onDestroy();
     }
