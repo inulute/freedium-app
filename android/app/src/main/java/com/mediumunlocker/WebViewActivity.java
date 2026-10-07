@@ -49,6 +49,7 @@ import com.google.android.material.snackbar.Snackbar;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.security.SecureRandom;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -113,6 +114,8 @@ public class WebViewActivity extends AppCompatActivity {
     // Article downloads (the mirror's "Download article" menu)
     private final ExecutorService downloadExecutor = Executors.newSingleThreadExecutor();
     private String downloadBridgeJs;
+    /** Secret the injected scripts pass back to DownloadBridge, so other frames can't use it. */
+    private final String bridgeToken = newBridgeToken();
     /** Main-frame URL, read from the JavaBridge thread to check who is asking to save. */
     private volatile String pageUrl;
     /** File waiting for the "Save as" picker used on Android 9 and below. */
@@ -224,7 +227,10 @@ public class WebViewActivity extends AppCompatActivity {
     /** Lets the mirror's own PDF / Markdown download links save files. Idempotent per page. */
     private void injectDownloadBridge() {
         if (webView == null || !isMirrorUrl(webView.getUrl())) return;
-        if (downloadBridgeJs == null) downloadBridgeJs = readRawResource(R.raw.download_bridge);
+        if (downloadBridgeJs == null) {
+            String js = readRawResource(R.raw.download_bridge);
+            if (js != null) downloadBridgeJs = js.replace("__MU_TOKEN__", JSONObject.quote(bridgeToken));
+        }
         if (downloadBridgeJs != null) webView.evaluateJavascript(downloadBridgeJs, null);
     }
 
@@ -534,6 +540,14 @@ public class WebViewActivity extends AppCompatActivity {
                 || url.contains("archive.md");
     }
 
+    private static String newBridgeToken() {
+        byte[] bytes = new byte[16];
+        new SecureRandom().nextBytes(bytes);
+        StringBuilder hex = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) hex.append(String.format(Locale.ROOT, "%02x", b));
+        return hex.toString();
+    }
+
     /** True for pages served by one of the mirrors, matched on the host rather than anywhere in the URL. */
     private static boolean isMirrorUrl(String url) {
         if (url == null) return false;
@@ -636,18 +650,33 @@ public class WebViewActivity extends AppCompatActivity {
     /**
      * Receives files from download_bridge.js. Methods run on the WebView's JavaBridge
      * thread, and only act while the main frame is one of the mirrors.
+     *
+     * The interface is visible to every frame, iframes from any origin included, so each
+     * call must carry {@link #bridgeToken}. Only scripts this activity injects into the
+     * main frame know it.
      */
     private class DownloadBridge {
+        private boolean allowed(String token) {
+            if (!bridgeToken.equals(token) || !isMirrorUrl(pageUrl)) {
+                Log.w(TAG, "Ignoring download bridge call on " + pageUrl);
+                return false;
+            }
+            return true;
+        }
+
         @JavascriptInterface
-        public void started(String fileName) {
-            if (!isMirrorUrl(pageUrl)) return;
+        public void started(String token, String fileName) {
+            if (!allowed(token)) return;
             runOnUiThread(() -> Toast.makeText(WebViewActivity.this, "Downloading…", Toast.LENGTH_SHORT).show());
         }
 
         @JavascriptInterface
-        public void save(String base64, String fileName, String mimeType) {
-            if (!isMirrorUrl(pageUrl)) {
-                Log.w(TAG, "Ignoring download from " + pageUrl);
+        public void save(String token, String base64, String fileName, String mimeType) {
+            if (!allowed(token)) return;
+            // Base64 is 4 chars per 3 bytes; refuse before decoding anything that big.
+            if (base64 == null || base64.length() / 4L * 3 > ArticleDownloads.MAX_BYTES) {
+                Log.w(TAG, "Ignoring oversized download " + fileName);
+                runOnUiThread(WebViewActivity.this::showDownloadFailed);
                 return;
             }
             runDownloadTask(() -> {
@@ -664,8 +693,8 @@ public class WebViewActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
-        public void fail(String fileName) {
-            if (!isMirrorUrl(pageUrl)) return;
+        public void fail(String token, String fileName) {
+            if (!allowed(token)) return;
             runOnUiThread(WebViewActivity.this::showDownloadFailed);
         }
     }
@@ -674,12 +703,18 @@ public class WebViewActivity extends AppCompatActivity {
     private void onDownloadRequested(String url, String userAgent, String contentDisposition,
                                      String mimeType, long contentLength) {
         if (url == null) return;
+        // Downloads are only for the mirror's article menu; a page or ad elsewhere can't save files.
+        if (!isMirrorUrl(webView.getUrl())) {
+            Log.w(TAG, "Ignoring download on " + webView.getUrl());
+            return;
+        }
         if (url.startsWith("blob:") || url.startsWith("data:")) {
             // Only readable from inside the page, and only while the page still holds it.
-            webView.evaluateJavascript("(function(u){fetch(u).then(function(r){return r.blob();})"
+            String token = JSONObject.quote(bridgeToken);
+            webView.evaluateJavascript("(function(u,t){fetch(u).then(function(r){return r.blob();})"
                     + ".then(function(b){var f=new FileReader();f.onload=function(){var s=String(f.result);"
-                    + "MuDownloads.save(s.substring(s.indexOf(',')+1),'',b.type);};f.readAsDataURL(b);})"
-                    + ".catch(function(){MuDownloads.fail('');});})(" + JSONObject.quote(url) + ")", null);
+                    + "MuDownloads.save(t,s.substring(s.indexOf(',')+1),'',b.type);};f.readAsDataURL(b);})"
+                    + ".catch(function(){MuDownloads.fail(t,'');});})(" + JSONObject.quote(url) + "," + token + ")", null);
             return;
         }
         if (!url.startsWith("http://") && !url.startsWith("https://")) return;
@@ -701,6 +736,11 @@ public class WebViewActivity extends AppCompatActivity {
     /** Saves a downloaded file. Does disk I/O, so run it on the download executor. */
     private void saveDownload(byte[] bytes, String fileName, String mimeType) {
         String name = ArticleDownloads.sanitizeFileName(fileName, mimeType);
+        if (!ArticleDownloads.isAllowedType(name)) {
+            Log.w(TAG, "Refusing to save " + name);
+            runOnUiThread(this::showDownloadFailed);
+            return;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 Uri uri = ArticleDownloads.saveToDownloads(this, bytes, name);

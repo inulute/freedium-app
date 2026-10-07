@@ -31,8 +31,13 @@ final class ArticleDownloads {
     /** Folder under Downloads that saved articles go into. */
     static final String FOLDER = "Freedium";
 
-    private static final int MAX_BYTES = 50 * 1024 * 1024;
+    static final int MAX_BYTES = 50 * 1024 * 1024;
     private static final int MAX_NAME_LENGTH = 120;
+    /**
+     * The mirror only offers articles as PDF or Markdown (txt in case a server labels the
+     * markdown text/plain); nothing else gets written to shared storage.
+     */
+    private static final String[] ALLOWED_EXTENSIONS = {"pdf", "md", "markdown", "txt"};
     private static final Pattern DISPOSITION_EXT =
             Pattern.compile("filename\\*\\s*=\\s*(?:UTF-8'')?([^;]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern DISPOSITION =
@@ -114,6 +119,15 @@ final class ArticleDownloads {
         String type = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
         if (type != null) return type;
         return mimeType != null && !mimeType.isEmpty() ? mimeType : "*/*";
+    }
+
+    /** True if a (sanitized) file name is an article format the app is willing to save. */
+    static boolean isAllowedType(String fileName) {
+        String ext = extension(fileName);
+        for (String allowed : ALLOWED_EXTENSIONS) {
+            if (allowed.equals(ext)) return true;
+        }
+        return false;
     }
 
     /** Makes a page-supplied name safe to use as a file name and gives it an extension. */
