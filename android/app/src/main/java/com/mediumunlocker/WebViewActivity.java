@@ -1,6 +1,7 @@
 package com.inulute.mediumunlocker;
 
 import android.app.Dialog;
+import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
@@ -11,11 +12,14 @@ import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Base64;
 import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -28,21 +32,42 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import org.json.JSONException;
+import org.json.JSONObject;
 import org.json.JSONTokener;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
+import com.google.android.material.snackbar.Snackbar;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 public class WebViewActivity extends AppCompatActivity {
 
     private static final String TAG = "WebViewActivity";
     private static final String PREFS_NAME = "MediumUnlockerPrefs";
     private static final String PREF_WEBVIEW_POPUP_SHOWN_VERSION = "webview_popup_shown_version";
+    private static final String STATE_PENDING_NAME = "pending_download_name";
+    private static final String STATE_PENDING_MIME = "pending_download_mime";
+    private static final String PENDING_DOWNLOAD_FILE = "pending_download";
+
+    private static final String[] MIRROR_HOSTS = {
+        "freedium.cfd", "freedium-mirror.cfd",
+        "archive.is", "archive.ph", "archive.today", "archive.fo",
+        "archive.li", "archive.vn", "archive.md"
+    };
 
     private static final String POPUP_BLOCKER_JS =
             "(function(){" +
@@ -85,10 +110,49 @@ public class WebViewActivity extends AppCompatActivity {
     private int startMirrorIndex = 0;
     private boolean mainFrameError = false;
 
+    // Article downloads (the mirror's "Download article" menu)
+    private final ExecutorService downloadExecutor = Executors.newSingleThreadExecutor();
+    private String downloadBridgeJs;
+    /** Main-frame URL, read from the JavaBridge thread to check who is asking to save. */
+    private volatile String pageUrl;
+    /** File waiting for the "Save as" picker used on Android 9 and below. */
+    private String pendingDownloadName;
+    private String pendingDownloadMime;
+
+    private final ActivityResultLauncher<Intent> saveAsLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(), result -> {
+                Uri uri = result.getData() != null ? result.getData().getData() : null;
+                File pending = new File(getCacheDir(), PENDING_DOWNLOAD_FILE);
+                String name = pendingDownloadName;
+                String mime = pendingDownloadMime;
+                pendingDownloadName = null;
+                pendingDownloadMime = null;
+                if (result.getResultCode() != RESULT_OK || uri == null || name == null) {
+                    pending.delete();
+                    return;
+                }
+                runDownloadTask(() -> {
+                    try {
+                        ArticleDownloads.copyToUri(this, pending, uri);
+                        runOnUiThread(() -> showDownloadSaved(uri, name, mime, "Saved " + name));
+                    } catch (IOException e) {
+                        Log.e(TAG, "Failed to save " + name, e);
+                        runOnUiThread(this::showDownloadFailed);
+                    } finally {
+                        pending.delete();
+                    }
+                });
+            });
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_webview);
+
+        if (savedInstanceState != null) {
+            pendingDownloadName = savedInstanceState.getString(STATE_PENDING_NAME);
+            pendingDownloadMime = savedInstanceState.getString(STATE_PENDING_MIME);
+        }
 
         historyManager = HistoryManager.getInstance(this);
         initializeViews();
@@ -108,6 +172,13 @@ public class WebViewActivity extends AppCompatActivity {
         currentMirrorIndex = 0;
         startMirrorIndex = 0;
         loadUrl();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putString(STATE_PENDING_NAME, pendingDownloadName);
+        outState.putString(STATE_PENDING_MIME, pendingDownloadMime);
     }
 
     @Override
@@ -148,6 +219,13 @@ public class WebViewActivity extends AppCompatActivity {
     private void injectPopupBlocker() {
         if (webView == null || !hidePopups()) return;
         webView.evaluateJavascript(POPUP_BLOCKER_JS, null);
+    }
+
+    /** Lets the mirror's own PDF / Markdown download links save files. Idempotent per page. */
+    private void injectDownloadBridge() {
+        if (webView == null || !isMirrorUrl(webView.getUrl())) return;
+        if (downloadBridgeJs == null) downloadBridgeJs = readRawResource(R.raw.download_bridge);
+        if (downloadBridgeJs != null) webView.evaluateJavascript(downloadBridgeJs, null);
     }
 
     private void showUpdateDialogIfNeeded() {
@@ -267,10 +345,14 @@ public class WebViewActivity extends AppCompatActivity {
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         );
 
+        webView.addJavascriptInterface(new DownloadBridge(), "MuDownloads");
+        webView.setDownloadListener(this::onDownloadRequested);
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
+                pageUrl = url;
                 positionRestored = false;
                 mainFrameError = false;
                 showLoading();
@@ -284,6 +366,7 @@ public class WebViewActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 hideLoading();
                 injectPopupBlocker();
+                injectDownloadBridge();
                 if (loadingOverlay != null) loadingOverlay.setVisibility(View.GONE);
 
                 String title = view.getTitle();
@@ -313,6 +396,13 @@ public class WebViewActivity extends AppCompatActivity {
                 }
 
                 updateNavButtons();
+            }
+
+            @Override
+            public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                super.doUpdateVisitedHistory(view, url, isReload);
+                // The mirror moves between articles client-side, without onPageStarted.
+                pageUrl = url;
             }
 
             @Override
@@ -366,7 +456,10 @@ public class WebViewActivity extends AppCompatActivity {
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
                 progressBar.setProgress(newProgress);
-                if (newProgress > 0) injectPopupBlocker();
+                if (newProgress > 0) {
+                    injectPopupBlocker();
+                    injectDownloadBridge();
+                }
                 if (newProgress == 100) hideLoading();
             }
 
@@ -439,6 +532,18 @@ public class WebViewActivity extends AppCompatActivity {
                 || url.contains("archive.today") || url.contains("archive.fo")
                 || url.contains("archive.li") || url.contains("archive.vn")
                 || url.contains("archive.md");
+    }
+
+    /** True for pages served by one of the mirrors, matched on the host rather than anywhere in the URL. */
+    private static boolean isMirrorUrl(String url) {
+        if (url == null) return false;
+        String host = Uri.parse(url).getHost();
+        if (host == null) return false;
+        host = host.toLowerCase(Locale.ROOT);
+        for (String mirror : MIRROR_HOSTS) {
+            if (host.equals(mirror) || host.endsWith("." + mirror)) return true;
+        }
+        return false;
     }
 
     private boolean isErrorTitle(String title) {
@@ -528,6 +633,154 @@ public class WebViewActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Receives files from download_bridge.js. Methods run on the WebView's JavaBridge
+     * thread, and only act while the main frame is one of the mirrors.
+     */
+    private class DownloadBridge {
+        @JavascriptInterface
+        public void started(String fileName) {
+            if (!isMirrorUrl(pageUrl)) return;
+            runOnUiThread(() -> Toast.makeText(WebViewActivity.this, "Downloading…", Toast.LENGTH_SHORT).show());
+        }
+
+        @JavascriptInterface
+        public void save(String base64, String fileName, String mimeType) {
+            if (!isMirrorUrl(pageUrl)) {
+                Log.w(TAG, "Ignoring download from " + pageUrl);
+                return;
+            }
+            runDownloadTask(() -> {
+                byte[] bytes;
+                try {
+                    bytes = Base64.decode(base64, Base64.DEFAULT);
+                } catch (IllegalArgumentException e) {
+                    Log.e(TAG, "Bad download payload", e);
+                    runOnUiThread(WebViewActivity.this::showDownloadFailed);
+                    return;
+                }
+                saveDownload(bytes, fileName, mimeType);
+            });
+        }
+
+        @JavascriptInterface
+        public void fail(String fileName) {
+            if (!isMirrorUrl(pageUrl)) return;
+            runOnUiThread(WebViewActivity.this::showDownloadFailed);
+        }
+    }
+
+    /** Downloads the bridge didn't catch: plain navigations to a file, or other origins. */
+    private void onDownloadRequested(String url, String userAgent, String contentDisposition,
+                                     String mimeType, long contentLength) {
+        if (url == null) return;
+        if (url.startsWith("blob:") || url.startsWith("data:")) {
+            // Only readable from inside the page, and only while the page still holds it.
+            webView.evaluateJavascript("(function(u){fetch(u).then(function(r){return r.blob();})"
+                    + ".then(function(b){var f=new FileReader();f.onload=function(){var s=String(f.result);"
+                    + "MuDownloads.save(s.substring(s.indexOf(',')+1),'',b.type);};f.readAsDataURL(b);})"
+                    + ".catch(function(){MuDownloads.fail('');});})(" + JSONObject.quote(url) + ")", null);
+            return;
+        }
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return;
+        String cookies = CookieManager.getInstance().getCookie(url);
+        String referer = webView.getUrl();
+        Toast.makeText(this, "Downloading…", Toast.LENGTH_SHORT).show();
+        runDownloadTask(() -> {
+            try {
+                ArticleDownloads.Download download = ArticleDownloads.fetch(
+                        url, userAgent, cookies, referer, contentDisposition, mimeType);
+                saveDownload(download.bytes, download.fileName, download.mimeType);
+            } catch (IOException e) {
+                Log.e(TAG, "Download failed: " + url, e);
+                runOnUiThread(this::showDownloadFailed);
+            }
+        });
+    }
+
+    /** Saves a downloaded file. Does disk I/O, so run it on the download executor. */
+    private void saveDownload(byte[] bytes, String fileName, String mimeType) {
+        String name = ArticleDownloads.sanitizeFileName(fileName, mimeType);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                Uri uri = ArticleDownloads.saveToDownloads(this, bytes, name);
+                runOnUiThread(() -> showDownloadSaved(uri, name, mimeType,
+                        "Saved to Downloads/" + ArticleDownloads.FOLDER));
+            } catch (IOException | RuntimeException e) {
+                Log.e(TAG, "Failed to save " + name, e);
+                runOnUiThread(this::showDownloadFailed);
+            }
+            return;
+        }
+        // Android 9 and below: writing to Downloads needs a storage permission, so let the
+        // user pick the location instead. The bytes wait in the cache until they do.
+        File pending = new File(getCacheDir(), PENDING_DOWNLOAD_FILE);
+        try (FileOutputStream out = new FileOutputStream(pending)) {
+            out.write(bytes);
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to stage " + name, e);
+            runOnUiThread(this::showDownloadFailed);
+            return;
+        }
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            pendingDownloadName = name;
+            pendingDownloadMime = mimeType;
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT)
+                    .addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType(ArticleDownloads.storageMimeType(name))
+                    .putExtra(Intent.EXTRA_TITLE, name);
+            try {
+                saveAsLauncher.launch(intent);
+            } catch (ActivityNotFoundException e) {
+                pendingDownloadName = null;
+                pendingDownloadMime = null;
+                pending.delete();
+                showDownloadFailed();
+            }
+        });
+    }
+
+    private void runDownloadTask(Runnable task) {
+        try {
+            downloadExecutor.execute(task);
+        } catch (RejectedExecutionException ignored) {
+            // The activity is being destroyed.
+        }
+    }
+
+    private void showDownloadSaved(Uri uri, String fileName, String mimeType, String message) {
+        if (isFinishing() || isDestroyed()) return;
+        Snackbar.make(webView, message, Snackbar.LENGTH_LONG)
+                .setAction("Open", v -> openDownload(uri, fileName, mimeType))
+                .show();
+    }
+
+    private void showDownloadFailed() {
+        if (isFinishing() || isDestroyed()) return;
+        Toast.makeText(this, "Download failed. Please try again.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void openDownload(Uri uri, String fileName, String mimeType) {
+        String type = ArticleDownloads.viewMimeType(fileName, mimeType);
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(uri, type)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
+        } catch (ActivityNotFoundException e) {
+            if (type.startsWith("text/") && !"text/plain".equals(type)) {
+                // Few devices have a markdown viewer, but most can show plain text.
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW)
+                            .setDataAndType(uri, "text/plain")
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
+                    return;
+                } catch (ActivityNotFoundException ignored) { }
+            }
+            Toast.makeText(this, "No app found to open " + fileName, Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void shareArticle() {
         String url = originalUrl != null ? originalUrl : webView.getUrl();
         String title = webView.getTitle();
@@ -546,6 +799,7 @@ public class WebViewActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        downloadExecutor.shutdown();
         if (webView != null) webView.destroy();
         super.onDestroy();
     }

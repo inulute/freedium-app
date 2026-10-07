@@ -19,3 +19,8 @@
 -dontusemixedcaseclassnames
 -dontskipnonpubliclibraryclasses
 -verbose
+
+# Keep methods called from page JavaScript (WebViewActivity's download bridge)
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
