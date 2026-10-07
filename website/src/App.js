@@ -4,6 +4,7 @@ import './App.css';
 const MIRRORS = [
   { label: 'Freedium Mirror',  value: 'freedium_mirror',base: 'https://freedium-mirror.cfd/' },
   { label: 'Freedium',         value: 'freedium',       base: 'https://freedium.cfd/' },
+  { label: 'Freedium Mirror Web', value: 'freedium_web', base: 'https://freedium-mirror-web.vercel.app/read?url=' },
   { label: 'Archive.is',       value: 'archive',        base: 'https://archive.is/newest/' },
   { label: 'Archive.is (Alt)', value: 'archive_alt',    base: 'https://archive.is/oldest/' },
 ];
@@ -85,7 +86,11 @@ function App() {
 
   const openArticle = (articleUrl) => {
     const selected = MIRRORS.find(m => m.value === mirror) || MIRRORS[0];
-    window.open(selected.base + articleUrl, '_blank');
+    // Mirrors that take the article as a query parameter need it encoded.
+    const target = selected.base.endsWith('=')
+      ? selected.base + encodeURIComponent(articleUrl)
+      : selected.base + articleUrl;
+    window.open(target, '_blank');
   };
 
   const handleUnlock = () => {

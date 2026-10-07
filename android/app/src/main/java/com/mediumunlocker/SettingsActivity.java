@@ -1,6 +1,7 @@
 package com.inulute.mediumunlocker;
 
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.SeekBar;
@@ -27,16 +28,30 @@ public class SettingsActivity extends AppCompatActivity {
     static final String PREF_MIRROR = "mirror";
     static final String DEFAULT_MIRROR = "freedium_mirror";
 
-    static final String[] MIRROR_LABELS = {"Freedium Mirror", "Freedium", "Archive.is", "Archive.is (Alt)"};
-    static final String[] MIRROR_VALUES = {"freedium_mirror", "freedium", "archive_newest", "archive_oldest"};
+    /** Also the order WebViewActivity falls back through when a mirror fails. */
+    static final String[] MIRROR_LABELS = {"Freedium Mirror", "Freedium", "Freedium Mirror Web", "Archive.is", "Archive.is (Alt)"};
+    static final String[] MIRROR_VALUES = {"freedium_mirror", "freedium", "freedium_web", "archive_newest", "archive_oldest"};
 
     public static String getMirrorBaseUrl(String mirrorValue) {
         switch (mirrorValue) {
             case "freedium": return "https://freedium.cfd/";
+            case "freedium_web": return "https://freedium-mirror-web.vercel.app/read?url=";
             case "archive_newest": return "https://archive.is/newest/";
             case "archive_oldest": return "https://archive.is/oldest/";
             default: return "https://freedium-mirror.cfd/";
         }
+    }
+
+    /**
+     * Mirror URL for an article. Most mirrors take the article URL appended as a path;
+     * those whose base ends in a query parameter ("?url=") need it encoded.
+     */
+    public static String buildMirrorUrl(String baseUrl, String articleUrl) {
+        return baseUrl.endsWith("=") ? baseUrl + Uri.encode(articleUrl) : baseUrl + articleUrl;
+    }
+
+    public static String getMirrorUrl(String mirrorValue, String articleUrl) {
+        return buildMirrorUrl(getMirrorBaseUrl(mirrorValue), articleUrl);
     }
 
     private static final String[] FEED_LABELS = {"Recent Articles", "Bookmarks"};

@@ -572,7 +572,7 @@ public class MainActivity extends AppCompatActivity {
     private String convertToFreedium(String mediumUrl) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         String mirror = prefs.getString(SettingsActivity.PREF_MIRROR, SettingsActivity.DEFAULT_MIRROR);
-        return SettingsActivity.getMirrorBaseUrl(mirror) + mediumUrl;
+        return SettingsActivity.getMirrorUrl(mirror, mediumUrl);
     }
 
     private String extractUrl(String text) {

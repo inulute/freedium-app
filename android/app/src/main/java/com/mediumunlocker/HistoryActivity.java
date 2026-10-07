@@ -359,7 +359,7 @@ public class HistoryActivity extends AppCompatActivity {
     private void openItem(HistoryManager.HistoryItem item) {
         SharedPreferences prefs = getSharedPreferences("MediumUnlockerPrefs", MODE_PRIVATE);
         String mirror = prefs.getString(SettingsActivity.PREF_MIRROR, SettingsActivity.DEFAULT_MIRROR);
-        String url = SettingsActivity.getMirrorBaseUrl(mirror) + item.originalUrl;
+        String url = SettingsActivity.getMirrorUrl(mirror, item.originalUrl);
         Intent intent = new Intent(this, WebViewActivity.class);
         intent.putExtra("url", url);
         intent.putExtra("originalUrl", item.originalUrl);

@@ -1,3 +1,32 @@
+# v3.1 (2026-10-07)
+
+---
+
+<div align='center'>
+
+<img src=./assets/freedium_logo.svg width='150px'>
+
+</div>
+
+---
+
+## New mirror and automatic fallback (relates to #10)
+
+- **Freedium Mirror Web** – [freedium-mirror-web.vercel.app](https://freedium-mirror-web.vercel.app/), a community mirror by Pradip Gosain, is now available in Settings → Mirror, after the two Freedium mirrors and before Archive.is.
+- **"You're offline" on every article** – When freedium.cfd's servers are down, its offline page was shown as if it were the article. The app now recognises that page and moves on to the next mirror.
+- **Hanging mirrors no longer stall** – A Freedium mirror that shows nothing within 15 seconds, or answers with a server error, is skipped automatically. The fallback order is Freedium Mirror → Freedium → Freedium Mirror Web → Archive.is.
+
+## Article downloads (#9, #11)
+
+- **PDF and Markdown downloads work** – The mirror's own download buttons now save into *Downloads/Freedium*. Thanks to @Manik400.
+- **Downloads locked to the mirror** – Only PDF and Markdown files from the mirror page itself can be saved; embedded third-party content can no longer write files.
+
+## Fixes
+
+- **Wrong mirror name while switching** – The "Switching to …" message could name a different mirror from the one being loaded.
+
+---
+
 # v3.0 (2026-09-06)
 
 ---
