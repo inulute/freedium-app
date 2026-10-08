@@ -99,6 +99,10 @@ public class WebViewActivity extends AppCompatActivity {
     /** Shown by the Freedium site's service worker when it can't reach its server. */
     private static final String OFFLINE_PAGE_CHECK_JS =
             "(document.body&&document.body.innerText||'').indexOf('Reconnect to read new articles')>=0";
+    /** Shown by the web mirror when it couldn't fetch the article. */
+    private static final String WEB_MIRROR_FAILED_CHECK_JS =
+            "(document.body&&document.body.innerText||'').indexOf('Could not load this article')>=0";
+    private static final String WEB_MIRROR_HOST = "freedium-mirror-web.vercel.app";
     private static final String TITLE_SUFFIX = " — Freedium Mirror";
 
     private HistoryManager historyManager;
@@ -399,14 +403,16 @@ public class WebViewActivity extends AppCompatActivity {
                     toolbar.setTitle(title);
                 }
                 // An abandoned load can still finish here, carrying the previous page's title.
-                if (pendingMirrorUrl != null && goodTitle && !isStaleMirrorLoad(Uri.parse(url))) {
-                    if (isFreediumUrl(url)) {
-                        // An offline page from the site's service worker still has a normal title.
-                        view.evaluateJavascript(OFFLINE_PAGE_CHECK_JS, offline -> {
-                            if ("true".equals(offline)) tryNextMirror("offline page");
-                            else mirrorLoaded();
+                if (pendingMirrorUrl != null && !isStaleMirrorLoad(Uri.parse(url))) {
+                    // Mirrors report some failures as ordinary pages; look for those first.
+                    String failedCheck = isFreediumUrl(url) ? OFFLINE_PAGE_CHECK_JS
+                            : isWebMirrorUrl(url) ? WEB_MIRROR_FAILED_CHECK_JS : null;
+                    if (failedCheck != null) {
+                        view.evaluateJavascript(failedCheck, failed -> {
+                            if ("true".equals(failed)) tryNextMirror("mirror couldn't load the article");
+                            else if (goodTitle) mirrorLoaded();
                         });
-                    } else {
+                    } else if (goodTitle) {
                         mirrorLoaded();
                     }
                 }
@@ -521,7 +527,7 @@ public class WebViewActivity extends AppCompatActivity {
         tryAlternativeButton.setVisibility(View.VISIBLE);
         tryAlternativeButton.setOnClickListener(v -> {
             if (originalUrl != null) {
-                int next = (currentMirrorIndex + 1) % MIRROR_BASES.length;
+                int next = nextSupportedMirror(currentMirrorIndex);
                 startMirrorIndex = next;
                 if (loadingText != null) loadingText.setText("Switching to " + getMirrorLabel(next) + "...");
                 if (loadingOverlay != null) loadingOverlay.setVisibility(View.VISIBLE);
@@ -551,8 +557,16 @@ public class WebViewActivity extends AppCompatActivity {
         }
         startMirrorIndex = currentMirrorIndex;
 
-        if (currentUrl != null && !currentUrl.isEmpty()) startMirrorLoad(currentUrl);
-        else showError();
+        if (currentUrl == null || currentUrl.isEmpty()) {
+            showError();
+        } else if (!mirrorSupportsArticle(currentMirrorIndex)) {
+            // e.g. the web mirror picked in Settings, opening a New York Times link.
+            int next = nextSupportedMirror(currentMirrorIndex);
+            startMirrorIndex = next;
+            loadMirror(next);
+        } else {
+            startMirrorLoad(currentUrl);
+        }
     }
 
     private void loadMirror(int index) {
@@ -584,7 +598,10 @@ public class WebViewActivity extends AppCompatActivity {
         if (webView == null || isFinishing() || isDestroyed()) return;
         webView.removeCallbacks(mirrorTimeout);
         pendingMirrorUrl = null;
-        int next = (currentMirrorIndex + 1) % MIRROR_BASES.length;
+        int next = currentMirrorIndex;
+        do {
+            next = (next + 1) % MIRROR_BASES.length;
+        } while (next != startMirrorIndex && !mirrorSupportsArticle(next));
         if (originalUrl == null || next == startMirrorIndex) {
             Log.d(TAG, getMirrorLabel(currentMirrorIndex) + " failed (" + reason + "), no mirrors left");
             webView.stopLoading();
@@ -611,6 +628,25 @@ public class WebViewActivity extends AppCompatActivity {
         if (pendingMirrorUrl == null || requestUrl == null) return false;
         String pendingHost = Uri.parse(pendingMirrorUrl).getHost();
         return pendingHost != null && !pendingHost.equalsIgnoreCase(requestUrl.getHost());
+    }
+
+    private boolean mirrorSupportsArticle(int index) {
+        return SettingsActivity.mirrorSupports(SettingsActivity.MIRROR_VALUES[index], originalUrl);
+    }
+
+    /** The next mirror after {@code index} that handles this article's publisher. */
+    private int nextSupportedMirror(int index) {
+        int next = index;
+        do {
+            next = (next + 1) % MIRROR_BASES.length;
+        } while (next != index && !mirrorSupportsArticle(next));
+        return next;
+    }
+
+    private static boolean isWebMirrorUrl(String url) {
+        if (url == null) return false;
+        String host = Uri.parse(url).getHost();
+        return WEB_MIRROR_HOST.equalsIgnoreCase(host);
     }
 
     private static boolean isFreediumUrl(String url) {
@@ -660,7 +696,9 @@ public class WebViewActivity extends AppCompatActivity {
         String lower = title.toLowerCase();
         return lower.contains("not available") || lower.contains("not found")
                 || lower.contains("can't be reached") || lower.contains("no internet")
-                || lower.contains("err_") || lower.equals("404") || lower.equals("error");
+                || lower.contains("err_") || lower.equals("404") || lower.equals("error")
+                // The web mirror's own error page has just the bare site name.
+                || lower.equals("freedium mirror");
     }
 
     private String getMirrorLabel(int index) {

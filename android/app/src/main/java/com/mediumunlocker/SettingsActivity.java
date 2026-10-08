@@ -15,6 +15,8 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.google.android.material.textfield.TextInputEditText;
 
+import java.util.Locale;
+
 public class SettingsActivity extends AppCompatActivity {
 
     private static final String PREFS_NAME = "MediumUnlockerPrefs";
@@ -48,6 +50,23 @@ public class SettingsActivity extends AppCompatActivity {
      */
     public static String buildMirrorUrl(String baseUrl, String articleUrl) {
         return baseUrl.endsWith("=") ? baseUrl + Uri.encode(articleUrl) : baseUrl + articleUrl;
+    }
+
+    /** Publishers other than Medium; Freedium handles them but the web mirror doesn't. */
+    private static final String[] NON_MEDIUM_HOSTS = {
+        "nytimes.com", "washingtonpost.com", "bloomberg.com", "reuters.com", "economist.com", "ft.com"
+    };
+
+    /** False when a mirror is known not to handle articles from this URL's publisher. */
+    public static boolean mirrorSupports(String mirrorValue, String articleUrl) {
+        if (!"freedium_web".equals(mirrorValue) || articleUrl == null) return true;
+        String host = Uri.parse(articleUrl).getHost();
+        if (host == null) return true;
+        host = host.toLowerCase(Locale.ROOT);
+        for (String publisher : NON_MEDIUM_HOSTS) {
+            if (host.equals(publisher) || host.endsWith("." + publisher)) return false;
+        }
+        return true;
     }
 
     public static String getMirrorUrl(String mirrorValue, String articleUrl) {
