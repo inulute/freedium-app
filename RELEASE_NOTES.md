@@ -1,3 +1,23 @@
+# v3.1.1 (2026-10-08)
+
+---
+
+<div align='center'>
+
+<img src=./assets/freedium_logo.svg width='150px'>
+
+</div>
+
+---
+
+## Fixes
+
+### Non-Medium articles stuck on "all mirror strategies failed" (relates to #10)
+- **Medium-only mirror skipped for other publishers** – Freedium Mirror Web only supports Medium. Links from The New York Times, The Washington Post, Bloomberg, Reuters, The Economist and the FT now skip it and go on to Archive.is instead of stopping on its error page.
+- **Web mirror failures fall through** – When Freedium Mirror Web can't load an article, the app now moves on to the next mirror instead of showing the error page.
+
+---
+
 # v3.1 (2026-10-07)
 
 ---
